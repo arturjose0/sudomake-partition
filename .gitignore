@@ -1,0 +1,7 @@
+/target
+*.exe
+*.zip
+macread-log.txt
+*.img
+*.raw
+*.dmg
