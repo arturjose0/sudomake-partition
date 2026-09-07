@@ -96,6 +96,7 @@ pub struct Ext4 {
     first_meta_bg: u32,
     label: String,
     pub uuid: [u8; 16],
+    free_blocks: u64,
     gd_cache: RefCell<HashMap<u32, Vec<u8>>>,
 }
 
@@ -148,6 +149,7 @@ impl Ext4 {
             first_meta_bg: le32(&sb, 0x104),
             label: cstr(&sb[120..136]),
             uuid,
+            free_blocks: le32(&sb, 12) as u64 | if is64 { (le32(&sb, 0x158) as u64) << 32 } else { 0 },
             gd_cache: RefCell::new(HashMap::new()),
         };
         if incompat & INCOMPAT_ENCRYPT != 0 {
@@ -489,6 +491,9 @@ impl FileSystem for Ext4 {
             read_all(self.open_inode(ino)?.as_mut())?
         };
         Ok(String::from_utf8_lossy(&data).trim_end_matches('\0').to_string())
+    }
+    fn capacity(&self) -> Option<(u64, u64)> {
+        Some((self.blocks_count * self.bs, self.free_blocks.min(self.blocks_count) * self.bs))
     }
     fn summary(&self) -> String {
         let mut feats = Vec::new();

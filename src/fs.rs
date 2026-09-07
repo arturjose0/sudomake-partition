@@ -136,6 +136,10 @@ pub trait FileSystem {
     fn open(&self, e: &Entry) -> io::Result<Box<dyn FileReader>>;
     fn read_link(&self, e: &Entry) -> io::Result<String>;
     fn summary(&self) -> String;
+    /// (total, livre) em bytes, quando o sistema de arquivos informa.
+    fn capacity(&self) -> Option<(u64, u64)> {
+        None
+    }
 }
 
 pub fn names_equal(a: &str, b: &str, case_sensitive: bool) -> bool {

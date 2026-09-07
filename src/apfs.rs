@@ -102,6 +102,8 @@ pub struct VolumeInfo {
     pub last_mod: u64,
     pub incompat: u64,
     pub fs_flags: u64,
+    /// blocos alocados por este volume
+    pub alloc_count: u64,
 }
 
 impl VolumeInfo {
@@ -234,6 +236,7 @@ impl Container {
                 last_mod: le64(&vsb, 256),
                 incompat,
                 fs_flags,
+                alloc_count: le64(&vsb, 88),
             });
         }
         Ok(Rc::new(c))
@@ -949,6 +952,11 @@ impl FileSystem for Volume {
             }
         }
         Err(err("destino do link simbólico não encontrado"))
+    }
+    fn capacity(&self) -> Option<(u64, u64)> {
+        let total = self.c.block_count * self.c.block_size as u64;
+        let used_all: u64 = self.c.volumes.iter().map(|v| v.alloc_count).sum::<u64>() * self.c.block_size as u64;
+        Some((total, total.saturating_sub(used_all)))
     }
     fn summary(&self) -> String {
         format!(

@@ -10,6 +10,7 @@ pub mod ext4;
 pub mod fsservice;
 pub mod fs;
 pub mod hfsplus;
+pub mod i18n;
 pub mod lvm;
 pub mod lzvn;
 pub mod open;

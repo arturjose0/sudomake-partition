@@ -1,0 +1,32 @@
+SUDOMAKE Partition — Mac and Linux disks on Windows. Made in Angola.
+
+Developed by:
+  José Artur Kassala
+  SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · VAT 5002359936
+  WhatsApp: +244 932 693 623 · E-mail: josearturkassala0@hotmail.com
+  Website: https://sudomakes.com · YouTube: https://www.youtube.com/@arturjose0
+  GitHub: https://github.com/arturjose0
+
+What the program does
+  • Shows the disks connected to the computer and the system installed on each partition
+    (Windows, Linux, macOS, data), as tiles like in Windows Explorer.
+  • Opens Mac (APFS, HFS+) and Linux (ext2/3/4, also inside LVM) partitions and disk images
+    (.img, .raw, .dmg) to browse and copy files, without installing drivers.
+  • Mounts a volume as a Windows drive letter (read-only), so files can be opened directly
+    in any program. This feature uses the Dokan 2 driver.
+  • Interface in Portuguese (Angola), English, French and Spanish; light, dark or system theme.
+  • Everything is read-only: nothing is written to the source disk.
+
+What this installer does
+  • Copies the program (graphical interface and command line) to the chosen folder,
+    for the current user or for all users of the computer.
+  • Checks the dependencies: if the Dokan 2 driver is not installed, it offers to download
+    it from the official page (https://github.com/dokan-dev/dokany, ~9 MB) and install it
+    automatically. Nothing else is required.
+  • Creates Start menu shortcuts (and, optionally, a desktop shortcut) and an uninstaller.
+
+Donation (not required)
+  PayPal: josearturkassala0@hotmail.com · Express transfer (Angola): 932693623
+  After donating, send the receipt via WhatsApp or e-mail. Thank you!
+
+Open source (MIT license): https://github.com/arturjose0/sudomake-partition

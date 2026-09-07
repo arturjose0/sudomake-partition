@@ -1,18 +1,31 @@
 [package]
-name = "macread"
-version = "1.1.0"
+name = "sudomake-partition"
+version = "1.2.0"
 edition = "2021"
-description = "Lê e copia arquivos de discos de Mac (APFS e HFS+) diretamente no Windows"
+description = "SUDOMAKE Partition: lê, copia e monta discos Mac (APFS, HFS+) e Linux (ext2/3/4, LVM) e imagens DMG no Windows. Feito em Angola."
+license = "MIT"
+repository = "https://github.com/arturjose0/sudomake-partition"
+
+[lib]
+name = "sudomake_partition"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sudomake-partition"
+path = "src/main.rs"
+
+[[bin]]
+name = "SudomakePartition"
+path = "src/bin/gui.rs"
 
 [dependencies]
 bzip2-rs = "0.1.2"
 flate2 = "1"
 lzfse_rust = "0.2"
 lzma-rs = "0.3.0"
-native-windows-gui = { version = "1.0", features = ["file-dialog", "list-view", "tree-view", "progress-bar", "notice", "menu", "status-bar", "tooltip", "textbox", "cursor", "rich-textbox"] }
+native-windows-gui = { version = "1.0", features = ["file-dialog", "list-view", "tree-view", "progress-bar", "notice", "menu", "status-bar", "tooltip", "textbox", "cursor", "rich-textbox", "frame", "combobox"] }
 unicode-normalization = "0.1"
-winapi = { version = "0.3", features = ["shellapi", "winuser", "shellscalingapi", "processthreadsapi", "securitybaseapi", "handleapi", "fileapi", "minwinbase", "libloaderapi", "consoleapi", "winnt", "errhandlingapi"] }
-
+winapi = { version = "0.3", features = ["shellapi", "winuser", "shellscalingapi", "processthreadsapi", "securitybaseapi", "handleapi", "fileapi", "minwinbase", "libloaderapi", "consoleapi", "winnt", "errhandlingapi", "wingdi", "dwmapi", "uxtheme", "winreg", "winnls", "windef", "minwindef", "commctrl"] }
 
 [profile.release]
 opt-level = 3

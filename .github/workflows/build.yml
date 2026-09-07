@@ -23,29 +23,29 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/macread.exe, target/release/macread-gui.exe, abrir-como-admin.cmd, README.md, LICENSE dist/
-          Compress-Archive -Path dist/macread.exe, dist/macread-gui.exe, dist/abrir-como-admin.cmd, dist/README.md, dist/LICENSE -DestinationPath macread-windows-x64.zip -Force
+          Copy-Item target/release/sudomake-partition.exe, target/release/SudomakePartition.exe, abrir-como-admin.cmd, README.md, LICENSE dist/
+          Compress-Archive -Path dist/sudomake-partition.exe, dist/SudomakePartition.exe, dist/abrir-como-admin.cmd, dist/README.md, dist/LICENSE -DestinationPath sudomake-partition-windows-x64.zip -Force
       - name: Instalador (Inno Setup)
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc installer\macread.iss
+          & $iscc installer\sudomake-partition.iss
           Get-ChildItem dist
       - uses: actions/upload-artifact@v4
         with:
-          name: macread-windows-x64
+          name: sudomake-partition-windows-x64
           path: |
-            target/release/macread.exe
-            target/release/macread-gui.exe
-            macread-windows-x64.zip
-            dist/macread-setup-*.exe
+            target/release/sudomake-partition.exe
+            target/release/SudomakePartition.exe
+            sudomake-partition-windows-x64.zip
+            dist/sudomake-partition-setup-*.exe
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/macread-setup-*.exe
-            macread-windows-x64.zip
-            target/release/macread.exe
-            target/release/macread-gui.exe
+            dist/sudomake-partition-setup-*.exe
+            sudomake-partition-windows-x64.zip
+            target/release/sudomake-partition.exe
+            target/release/SudomakePartition.exe

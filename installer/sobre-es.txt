@@ -1,0 +1,32 @@
+SUDOMAKE Partition — discos Mac y Linux en Windows. Hecho en Angola.
+
+Desarrollado por:
+  José Artur Kassala
+  SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · NIF 5002359936
+  WhatsApp: +244 932 693 623 · Correo: josearturkassala0@hotmail.com
+  Sitio: https://sudomakes.com · YouTube: https://www.youtube.com/@arturjose0
+  GitHub: https://github.com/arturjose0
+
+Qué hace el programa
+  • Muestra los discos conectados al equipo y el sistema instalado en cada partición
+    (Windows, Linux, macOS, datos), en mosaicos como en el Explorador de Windows.
+  • Abre particiones Mac (APFS, HFS+) y Linux (ext2/3/4, también dentro de LVM) e imágenes
+    de disco (.img, .raw, .dmg) para navegar y copiar archivos, sin instalar controladores.
+  • Monta un volumen como una letra de unidad de Windows (solo lectura), para abrir los
+    archivos directamente en cualquier programa. Esta función usa el controlador Dokan 2.
+  • Interfaz en portugués (Angola), inglés, francés y español; tema claro, oscuro o del sistema.
+  • Todo es de solo lectura: no se escribe nada en el disco de origen.
+
+Qué hace este instalador
+  • Copia el programa (interfaz gráfica y línea de comandos) a la carpeta elegida,
+    para el usuario actual o para todos los usuarios del equipo.
+  • Comprueba las dependencias: si el controlador Dokan 2 no está instalado, ofrece
+    descargarlo de la página oficial (https://github.com/dokan-dev/dokany, ~9 MB) e
+    instalarlo automáticamente. No se necesita nada más.
+  • Crea accesos directos en el menú Inicio (y, si lo desea, en el escritorio) y un desinstalador.
+
+Donación (no obligatoria)
+  PayPal: josearturkassala0@hotmail.com · Transferencia Express (Angola): 932693623
+  Después de donar, envíe el comprobante por WhatsApp o correo. ¡Gracias!
+
+Código abierto (licencia MIT): https://github.com/arturjose0/sudomake-partition

@@ -1,34 +1,34 @@
-//! macread — lê e copia arquivos de discos de Mac (APFS / HFS+) no Windows.
+//! SUDOMAKE Partition (linha de comando) — lê e copia arquivos de discos Mac e Linux no Windows.
 
 use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
 
-use macread::device::BlockDevice;
-use macread::fs::{self, Entry, FileSystem, Kind};
-use macread::open::{open_fs, open_physical, open_source, partition_device, select_partition};
-use macread::partition::{self, FsKind, Layout};
-use macread::util::*;
-use macread::{apfs, copy, device, dokan, ext4, fsservice, hfsplus, osdetect};
-use macread::open::Source;
+use sudomake_partition::device::BlockDevice;
+use sudomake_partition::fs::{self, Entry, FileSystem, Kind};
+use sudomake_partition::open::{open_fs, open_physical, open_source, partition_device, select_partition};
+use sudomake_partition::partition::{self, FsKind, Layout};
+use sudomake_partition::util::*;
+use sudomake_partition::{apfs, copy, device, dokan, ext4, fsservice, hfsplus, osdetect};
+use sudomake_partition::open::Source;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn usage() {
     println!(
-        r#"macread {v} — lê e copia arquivos de discos de Mac (APFS, HFS+) e Linux (ext2/3/4, LVM) no Windows
+        r#"SUDOMAKE Partition {v} (linha de comando) — lê e copia arquivos de discos de Mac (APFS, HFS+) e Linux (ext2/3/4, LVM) no Windows
 
 USO:
-  macread discos                                   lista os discos físicos e suas partições
-  macread info    <origem>                         mostra partições e volumes da origem
-  macread ls      <origem> [caminho] [-l]          lista uma pasta
-  macread arvore  <origem> [caminho] [--nivel N]   mostra a árvore de pastas
-  macread cat     <origem> <arquivo>               envia um arquivo para a saída padrão
-  macread copiar  <origem> <caminho> <destino>     copia um arquivo ou pasta (recursivo)
-  macread verificar <origem> [caminho]             lê todos os arquivos sem gravar (testa a leitura)
-  macread hex     <origem> [offset] [tamanho]      mostra bytes brutos do disco (diagnóstico)
-  macread montar  <origem> [letra]                 monta como unidade do Windows (precisa do Dokan)
-  macread desmontar <letra>                        desmonta uma unidade montada pelo macread
+  sudomake-partition discos                                   lista os discos físicos e suas partições
+  sudomake-partition info    <origem>                         mostra partições e volumes da origem
+  sudomake-partition ls      <origem> [caminho] [-l]          lista uma pasta
+  sudomake-partition arvore  <origem> [caminho] [--nivel N]   mostra a árvore de pastas
+  sudomake-partition cat     <origem> <arquivo>               envia um arquivo para a saída padrão
+  sudomake-partition copiar  <origem> <caminho> <destino>     copia um arquivo ou pasta (recursivo)
+  sudomake-partition verificar <origem> [caminho]             lê todos os arquivos sem gravar (testa a leitura)
+  sudomake-partition hex     <origem> [offset] [tamanho]      mostra bytes brutos do disco (diagnóstico)
+  sudomake-partition montar  <origem> [letra]                 monta como unidade do Windows (precisa do Dokan)
+  sudomake-partition desmontar <letra>                        desmonta uma unidade montada pelo macread
 
 ORIGEM:
   disco:1            disco físico nº 1 (veja "macread discos"; precisa de Administrador)
@@ -47,15 +47,17 @@ OPÇÕES:
   --forcar           tenta abrir mesmo volumes marcados como criptografados
 
 EXEMPLOS:
-  macread discos
-  macread info disco:1
-  macread ls disco:1 /Users
-  macread copiar disco:1 /Users/joao/Documents D:\Recuperado
-  macread copiar disco:1 / D:\Recuperado\Tudo -v 2
+  sudomake-partition discos
+  sudomake-partition info disco:1
+  sudomake-partition ls disco:1 /Users
+  sudomake-partition copiar disco:1 /Users/joao/Documents D:\Recuperado
+  sudomake-partition copiar disco:1 / D:\Recuperado\Tudo -v 2
 
-Desenvolvido por SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA
-NIF 5002359936 · Contacto 932693623 · https://sudomakes.com
-Código aberto (MIT): https://github.com/arturjose0/macread
+Feito em Angola por José Artur Kassala · SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · NIF 5002359936
+WhatsApp +244 932 693 623 · josearturkassala0@hotmail.com · https://sudomakes.com
+YouTube https://www.youtube.com/@arturjose0 · GitHub https://github.com/arturjose0
+Doação (opcional): PayPal josearturkassala0@hotmail.com · Transferência Express 932693623
+Código aberto (MIT): https://github.com/arturjose0/sudomake-partition
 "#,
         v = VERSION
     );
@@ -168,7 +170,7 @@ fn cmd_discos() -> io::Result<()> {
             Ok((dev, layout)) => {
                 print_layout(&layout, "  ");
                 for p in layout.parts.iter().filter(|p| p.fs.is_supported()) {
-                    let src = macread::open::Source { spec: format!("disco:{}", d.number), part: Some(p.index), vol: None, force: false };
+                    let src = sudomake_partition::open::Source { spec: format!("disco:{}", d.number), part: Some(p.index), vol: None, force: false };
                     match &p.fs {
                         FsKind::Apfs => {
                             if let Ok(c) = apfs::Container::open(partition_device(&dev, p)) {
@@ -177,16 +179,16 @@ fn cmd_discos() -> io::Result<()> {
                                         println!("      partição {} volume {} \"{}\": criptografado (FileVault)", p.index, v.index + 1, v.name);
                                         continue;
                                     }
-                                    let s = macread::open::Source { vol: Some(v.index + 1), ..src.clone() };
-                                    if let Ok(o) = macread::open::open(&s, true) {
-                                        println!("      partição {} volume {} \"{}\": {}", p.index, v.index + 1, v.name, osdetect::detect(o.fs.as_ref()));
+                                    let s = sudomake_partition::open::Source { vol: Some(v.index + 1), ..src.clone() };
+                                    if let Ok(o) = sudomake_partition::open::open(&s, true) {
+                                        println!("      partição {} volume {} \"{}\": {}", p.index, v.index + 1, v.name, osdetect::detect(o.fs.as_ref()).describe_pt());
                                     }
                                 }
                             }
                         }
                         _ => {
-                            if let Ok(o) = macread::open::open(&src, true) {
-                                println!("      partição {}: {}", p.index, osdetect::detect(o.fs.as_ref()));
+                            if let Ok(o) = sudomake_partition::open::open(&src, true) {
+                                println!("      partição {}: {}", p.index, osdetect::detect(o.fs.as_ref()).describe_pt());
                             }
                         }
                     }
@@ -443,7 +445,7 @@ fn cmd_desmontar(a: &Args) -> io::Result<()> {
 
 fn cmd_copiar(a: &Args, verify: bool) -> io::Result<()> {
     if a.pos.len() < if verify { 1 } else { 3 } {
-        return Err(err("uso: macread copiar <origem> <caminho-no-mac> <pasta-destino>"));
+        return Err(err("uso: sudomake-partition copiar <origem> <caminho-no-mac> <pasta-destino>"));
     }
     let o = open_from_args(a)?;
     let src = a.pos.get(1).map(String::as_str).unwrap_or("/");
@@ -453,7 +455,7 @@ fn cmd_copiar(a: &Args, verify: bool) -> io::Result<()> {
     if !a.dry_run && !verify {
         std::fs::create_dir_all(&dest_long)?;
     }
-    let log_path = dest_long.join("macread-log.txt");
+    let log_path = dest_long.join("sudomake-partition-log.txt");
     let mut st = copy::Stats::new(if a.dry_run || verify { None } else { Some(&log_path) });
     let opts = copy::Options { overwrite: a.overwrite, symlinks: a.symlinks, verbose: a.verbose, dry_run: a.dry_run, verify };
     if verify {

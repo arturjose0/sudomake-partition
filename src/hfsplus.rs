@@ -292,6 +292,8 @@ pub struct HfsPlus {
     priv_dir: Option<u32>,
     file_count: u32,
     folder_count: u32,
+    total_blocks: u32,
+    free_blocks: u32,
 }
 
 fn cat_cmp(k: &[u8], parent: u32) -> Ordering {
@@ -317,6 +319,8 @@ impl HfsPlus {
         }
         let file_count = be32(&h, 32);
         let folder_count = be32(&h, 36);
+        let total_blocks = be32(&h, 44);
+        let free_blocks = be32(&h, 48);
         let extents_fd = ForkData::parse(&h[192..272]);
         let catalog_fd = ForkData::parse(&h[272..352]);
         let attrs_fd = ForkData::parse(&h[352..432]);
@@ -349,6 +353,8 @@ impl HfsPlus {
             priv_dir: None,
             file_count,
             folder_count,
+            total_blocks,
+            free_blocks,
         };
         // Nome do volume = nome da pasta raiz (registro thread do CNID 2)
         let mut cur = fs.catalog.seek(&|k| cat_cmp(k, ROOT_FOLDER))?;
@@ -628,6 +634,9 @@ impl FileSystem for HfsPlus {
         let mut rd = self.reader(r.cnid, 0, &r.data)?;
         let b = read_all(&mut rd)?;
         Ok(String::from_utf8_lossy(&b).trim_end_matches('\0').to_string())
+    }
+    fn capacity(&self) -> Option<(u64, u64)> {
+        Some((self.total_blocks as u64 * self.bs, self.free_blocks.min(self.total_blocks) as u64 * self.bs))
     }
     fn summary(&self) -> String {
         format!(

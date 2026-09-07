@@ -4,6 +4,58 @@
 use crate::fs::{lookup, read_all, FileSystem, Kind};
 use crate::partition::{FsKind, Partition};
 
+/// Resultado da detecção (a tradução fica a cargo de quem mostra).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Detected {
+    /// nome do sistema Linux (PRETTY_NAME do os-release)
+    Linux(String),
+    /// nome do produto e versão do macOS
+    MacOs(String, String),
+    /// volume de dados do macOS (nomes dos utilizadores)
+    MacData(Vec<String>),
+    /// pasta /home do Linux; `system` indica se também há /etc e /usr
+    LinuxHome { users: Vec<String>, system: bool },
+    LinuxGeneric,
+    MacGeneric,
+    TimeMachine,
+    /// disco de dados com N itens na raiz
+    Data(usize),
+    Empty,
+}
+
+impl Detected {
+    /// Nome curto para resumos ("Ubuntu 22.04.4 LTS", "macOS", "Linux"...).
+    pub fn short(&self) -> Option<String> {
+        match self {
+            Detected::Linux(n) => Some(n.clone()),
+            Detected::MacOs(n, v) => Some(format!("{} {}", n, v).trim().to_string()),
+            Detected::MacData(_) | Detected::MacGeneric => Some("macOS".into()),
+            Detected::LinuxHome { .. } | Detected::LinuxGeneric => Some("Linux".into()),
+            Detected::TimeMachine => Some("Time Machine".into()),
+            Detected::Data(_) | Detected::Empty => None,
+        }
+    }
+
+    /// Descrição em português (linha de comando).
+    pub fn describe_pt(&self) -> String {
+        match self {
+            Detected::Linux(n) => format!("{} (sistema Linux)", n),
+            Detected::MacOs(n, v) => format!("{} {} (sistema)", n, v).trim().to_string(),
+            Detected::MacData(u) if u.is_empty() => "macOS: dados do usuário".into(),
+            Detected::MacData(u) => format!("macOS: dados do usuário ({})", u.join(", ")),
+            Detected::LinuxHome { users, system } => {
+                let base = if *system { "Linux (sistema sem os-release)" } else { "Linux: pasta /home" };
+                if users.is_empty() { base.to_string() } else { format!("{} ({})", base, users.join(", ")) }
+            }
+            Detected::LinuxGeneric => "Linux (sistema sem os-release)".into(),
+            Detected::MacGeneric => "macOS (sem versão identificada)".into(),
+            Detected::TimeMachine => "Backup do Time Machine".into(),
+            Detected::Data(n) => format!("disco de dados ({} itens na raiz)", n),
+            Detected::Empty => "vazio".into(),
+        }
+    }
+}
+
 fn read_text(fs: &dyn FileSystem, path: &str, max: usize) -> Option<String> {
     let e = lookup(fs, path).ok()?;
     if e.kind != Kind::File || e.size as usize > max {
@@ -20,6 +72,13 @@ fn exists(fs: &dyn FileSystem, path: &str) -> bool {
 
 fn is_dir(fs: &dyn FileSystem, path: &str) -> bool {
     lookup(fs, path).map(|e| e.kind == Kind::Dir).unwrap_or(false)
+}
+
+fn subdirs(fs: &dyn FileSystem, path: &str) -> Vec<String> {
+    lookup(fs, path)
+        .and_then(|e| fs.read_dir(&e))
+        .map(|v| v.into_iter().filter(|e| e.kind == Kind::Dir && !e.name.starts_with('.') && e.name != "Shared").map(|e| e.name).collect())
+        .unwrap_or_default()
 }
 
 fn os_release_name(text: &str) -> Option<String> {
@@ -45,102 +104,153 @@ fn plist_string(text: &str, key: &str) -> Option<String> {
     Some(rest[s..e].trim().to_string())
 }
 
-/// Nome do sistema encontrado no volume, ou uma descrição da sua finalidade.
-pub fn detect(fs: &dyn FileSystem) -> String {
-    // Linux
+/// Detecta o sistema instalado no volume.
+pub fn detect(fs: &dyn FileSystem) -> Detected {
     for p in ["/etc/os-release", "/usr/lib/os-release"] {
         if let Some(t) = read_text(fs, p, 64 * 1024) {
             if let Some(n) = os_release_name(&t) {
-                return format!("{} (sistema Linux)", n);
+                return Detected::Linux(n);
             }
         }
     }
-    // macOS (volume de sistema, ou volume único em versões antigas)
     for p in ["/System/Library/CoreServices/SystemVersion.plist", "/System/Library/CoreServices/ServerVersion.plist"] {
         if let Some(t) = read_text(fs, p, 64 * 1024) {
             let name = plist_string(&t, "ProductName").unwrap_or_else(|| "macOS".into());
             let ver = plist_string(&t, "ProductVersion").unwrap_or_default();
-            return format!("{} {} (sistema)", name, ver).trim().to_string();
+            return Detected::MacOs(name, ver);
         }
     }
     if is_dir(fs, "/Backups.backupdb") {
-        return "Backup do Time Machine".into();
+        return Detected::TimeMachine;
     }
     if is_dir(fs, "/Users") {
-        let users: Vec<String> = fs
-            .read_dir(&lookup(fs, "/Users").unwrap())
-            .map(|v| v.into_iter().filter(|e| e.kind == Kind::Dir && !e.name.starts_with('.') && e.name != "Shared").map(|e| e.name).collect())
-            .unwrap_or_default();
-        return if users.is_empty() {
-            "macOS: dados do usuário".into()
-        } else {
-            format!("macOS: dados do usuário ({})", users.join(", "))
-        };
+        return Detected::MacData(subdirs(fs, "/Users"));
     }
     if is_dir(fs, "/home") {
-        let users: Vec<String> = fs
-            .read_dir(&lookup(fs, "/home").unwrap())
-            .map(|v| v.into_iter().filter(|e| e.kind == Kind::Dir && !e.name.starts_with('.')).map(|e| e.name).collect())
-            .unwrap_or_default();
-        let base = if exists(fs, "/etc") && exists(fs, "/usr") { "Linux (sistema sem os-release)" } else { "Linux: pasta /home" };
-        return if users.is_empty() { base.to_string() } else { format!("{} ({})", base, users.join(", ")) };
+        return Detected::LinuxHome { users: subdirs(fs, "/home"), system: exists(fs, "/etc") && exists(fs, "/usr") };
     }
     if exists(fs, "/Applications") && exists(fs, "/Library") {
-        return "macOS (sem versão identificada)".into();
+        return Detected::MacGeneric;
     }
     if exists(fs, "/etc") && exists(fs, "/usr") {
-        return "Linux (sistema sem os-release)".into();
+        return Detected::LinuxGeneric;
     }
     match fs.root().and_then(|r| fs.read_dir(&r)) {
-        Ok(v) if v.is_empty() => "vazio".into(),
-        Ok(v) => format!("disco de dados ({} itens na raiz)", v.len()),
-        Err(_) => "disco de dados".into(),
+        Ok(v) if v.is_empty() => Detected::Empty,
+        Ok(v) => Detected::Data(v.len()),
+        Err(_) => Detected::Data(0),
     }
 }
 
-/// Descrição curta de partições que o macread não lê (Windows, EFI, swap...).
-pub fn describe_partition(p: &Partition) -> String {
+/// Finalidade de uma partição que o programa não lê (Windows, EFI, swap...).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PartKind {
+    Windows,
+    WindowsRecovery,
+    Efi,
+    Fat,
+    ExFat,
+    Swap,
+    Luks,
+    Lvm,
+    Xfs,
+    Btrfs,
+    F2fs,
+    CoreStorage,
+    HfsClassic,
+    Reserved,
+    Empty,
+    Boot,
+    Recovery,
+    Unknown,
+    /// partição legível (APFS, HFS+, ext)
+    Readable,
+}
+
+pub fn classify_partition(p: &Partition) -> PartKind {
     let t = p.type_name.to_lowercase();
     match &p.fs {
         FsKind::Ntfs => {
             if t.contains("recovery") || p.len < 2_000_000_000 {
-                "Windows: recuperação/sistema".into()
+                PartKind::WindowsRecovery
             } else {
-                "Windows (NTFS)".into()
+                PartKind::Windows
             }
         }
-        FsKind::ExFat => "dados (exFAT)".into(),
+        FsKind::ExFat => PartKind::ExFat,
         FsKind::Fat => {
             if t.contains("efi") {
-                "EFI (inicialização)".into()
+                PartKind::Efi
             } else {
-                "dados (FAT)".into()
+                PartKind::Fat
             }
         }
-        FsKind::Swap => "Linux swap".into(),
-        FsKind::Luks => "Linux criptografado (LUKS)".into(),
-        FsKind::Lvm => "LVM (os volumes lógicos aparecem em separado)".into(),
-        FsKind::Xfs => "Linux (XFS, ainda não legível)".into(),
-        FsKind::Btrfs => "Linux (Btrfs, ainda não legível)".into(),
-        FsKind::F2fs => "Linux (F2FS, ainda não legível)".into(),
-        FsKind::CoreStorage => "macOS Core Storage (FileVault antigo/Fusion, não legível)".into(),
-        FsKind::Hfs => "HFS clássico (não legível)".into(),
+        FsKind::Swap => PartKind::Swap,
+        FsKind::Luks => PartKind::Luks,
+        FsKind::Lvm => PartKind::Lvm,
+        FsKind::Xfs => PartKind::Xfs,
+        FsKind::Btrfs => PartKind::Btrfs,
+        FsKind::F2fs => PartKind::F2fs,
+        FsKind::CoreStorage => PartKind::CoreStorage,
+        FsKind::Hfs => PartKind::HfsClassic,
         FsKind::Empty => {
             if t.contains("reserved") {
-                "reservado (Windows)".into()
+                PartKind::Reserved
             } else {
-                "vazio".into()
+                PartKind::Empty
             }
         }
         FsKind::Unknown => {
             if t.contains("recovery") {
-                "recuperação do Windows".into()
+                PartKind::Recovery
             } else if t.contains("boot") {
-                "inicialização".into()
+                PartKind::Boot
             } else {
-                "desconhecido".into()
+                PartKind::Unknown
             }
         }
-        _ => String::new(),
+        _ => PartKind::Readable,
     }
+}
+
+impl PartKind {
+    /// Chave de tradução (`i18n`) correspondente.
+    pub fn key(self) -> &'static str {
+        match self {
+            PartKind::Windows => "part_windows",
+            PartKind::WindowsRecovery => "part_windows_recovery",
+            PartKind::Efi => "part_efi",
+            PartKind::Fat => "part_fat",
+            PartKind::ExFat => "part_exfat",
+            PartKind::Swap => "part_swap",
+            PartKind::Luks => "part_luks",
+            PartKind::Lvm => "part_lvm",
+            PartKind::Xfs => "part_xfs",
+            PartKind::Btrfs => "part_btrfs",
+            PartKind::F2fs => "part_f2fs",
+            PartKind::CoreStorage => "part_corestorage",
+            PartKind::HfsClassic => "part_hfs_classic",
+            PartKind::Reserved => "part_reserved",
+            PartKind::Empty => "part_empty",
+            PartKind::Boot => "part_boot",
+            PartKind::Recovery => "part_recovery",
+            PartKind::Unknown => "part_unknown",
+            PartKind::Readable => "",
+        }
+    }
+
+    /// Nome curto para o resumo do disco.
+    pub fn short(self) -> Option<&'static str> {
+        match self {
+            PartKind::Windows | PartKind::WindowsRecovery => Some("Windows"),
+            PartKind::Luks | PartKind::Xfs | PartKind::Btrfs | PartKind::F2fs | PartKind::Swap => Some("Linux"),
+            PartKind::CoreStorage => Some("macOS"),
+            _ => None,
+        }
+    }
+}
+
+/// Descrição em português (linha de comando).
+pub fn describe_partition(p: &Partition) -> String {
+    crate::i18n::tr(crate::i18n::Lang::Pt, classify_partition(p).key()).to_string()
 }

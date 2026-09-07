@@ -1,0 +1,33 @@
+SUDOMAKE Partition — disques Mac et Linux sous Windows. Fabriqué en Angola.
+
+Développé par :
+  José Artur Kassala
+  SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · NIF 5002359936
+  WhatsApp : +244 932 693 623 · E-mail : josearturkassala0@hotmail.com
+  Site : https://sudomakes.com · YouTube : https://www.youtube.com/@arturjose0
+  GitHub : https://github.com/arturjose0
+
+Ce que fait le programme
+  • Affiche les disques connectés à l'ordinateur et le système installé sur chaque partition
+    (Windows, Linux, macOS, données), sous forme de tuiles comme dans l'Explorateur Windows.
+  • Ouvre les partitions Mac (APFS, HFS+) et Linux (ext2/3/4, y compris dans LVM) et les
+    images de disque (.img, .raw, .dmg) pour parcourir et copier des fichiers, sans pilote.
+  • Monte un volume comme une lettre de lecteur Windows (lecture seule), pour ouvrir les
+    fichiers directement dans n'importe quel programme. Cette fonction utilise le pilote Dokan 2.
+  • Interface en portugais (Angola), anglais, français et espagnol ; thème clair, sombre ou système.
+  • Tout est en lecture seule : rien n'est écrit sur le disque d'origine.
+
+Ce que fait cet installateur
+  • Copie le programme (interface graphique et ligne de commande) dans le dossier choisi,
+    pour l'utilisateur actuel ou pour tous les utilisateurs de l'ordinateur.
+  • Vérifie les dépendances : si le pilote Dokan 2 n'est pas installé, il propose de le
+    télécharger depuis la page officielle (https://github.com/dokan-dev/dokany, ~9 Mo) et
+    de l'installer automatiquement. Rien d'autre n'est nécessaire.
+  • Crée des raccourcis dans le menu Démarrer (et, si vous le souhaitez, sur le bureau)
+    ainsi qu'un désinstallateur.
+
+Don (facultatif)
+  PayPal : josearturkassala0@hotmail.com · Transfert Express (Angola) : 932693623
+  Après votre don, envoyez le reçu par WhatsApp ou e-mail. Merci !
+
+Open source (licence MIT) : https://github.com/arturjose0/sudomake-partition

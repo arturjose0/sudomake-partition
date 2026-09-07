@@ -147,19 +147,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macread"
-version = "1.1.0"
-dependencies = [
- "bzip2-rs",
- "flate2",
- "lzfse_rust",
- "lzma-rs",
- "native-windows-gui",
- "unicode-normalization",
- "winapi",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -277,6 +264,19 @@ checksum = "7b0dc6d20ce137f302edf90f9cd3d278866fd7fb139efca6f246161222ad6d87"
 dependencies = [
  "lazy_static",
  "libm",
+]
+
+[[package]]
+name = "sudomake-partition"
+version = "1.2.0"
+dependencies = [
+ "bzip2-rs",
+ "flate2",
+ "lzfse_rust",
+ "lzma-rs",
+ "native-windows-gui",
+ "unicode-normalization",
+ "winapi",
 ]
 
 [[package]]

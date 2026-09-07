@@ -1,0 +1,32 @@
+SUDOMAKE Partition — discos Mac e Linux no Windows. Feito em Angola.
+
+Desenvolvido por:
+  José Artur Kassala
+  SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · NIF 5002359936
+  WhatsApp: +244 932 693 623 · E-mail: josearturkassala0@hotmail.com
+  Site: https://sudomakes.com · YouTube: https://www.youtube.com/@arturjose0
+  GitHub: https://github.com/arturjose0
+
+O que o programa faz
+  • Mostra os discos ligados ao computador e o sistema instalado em cada partição
+    (Windows, Linux, macOS, dados), em azulejos como no Explorador do Windows.
+  • Abre partições Mac (APFS, HFS+) e Linux (ext2/3/4, também dentro de LVM) e imagens
+    de disco (.img, .raw, .dmg) para navegar e copiar ficheiros, sem instalar drivers.
+  • Monta um volume como uma letra de unidade do Windows (somente leitura), para abrir os
+    ficheiros directamente em qualquer programa. Esta função usa o driver Dokan 2.
+  • Interface em português (Angola), inglês, francês e espanhol; tema claro, escuro ou do sistema.
+  • Tudo é somente leitura: nada é gravado no disco de origem.
+
+O que este instalador faz
+  • Copia o programa (interface gráfica e linha de comando) para a pasta escolhida,
+    para o utilizador actual ou para todos os utilizadores do computador.
+  • Verifica as dependências: se o driver Dokan 2 não estiver instalado, oferece
+    descarregá-lo da página oficial (https://github.com/dokan-dev/dokany, ~9 MB) e
+    instalá-lo automaticamente. Nada mais é necessário.
+  • Cria atalhos no menu Iniciar (e, se quiser, no ambiente de trabalho) e um desinstalador.
+
+Doação (não obrigatória)
+  PayPal: josearturkassala0@hotmail.com · Transferência Express: 932693623
+  Depois de doar, envie o comprovativo pelo WhatsApp ou e-mail. Obrigado!
+
+Código aberto (licença MIT): https://github.com/arturjose0/sudomake-partition
