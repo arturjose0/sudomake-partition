@@ -1,5 +1,6 @@
 //! macread-gui — interface gráfica para navegar em discos Mac (APFS/HFS+), Linux (ext2/3/4, LVM)
-//! e imagens de disco/DMG no Windows, e copiar arquivos.
+//! e imagens de disco/DMG no Windows, copiar arquivos e montar volumes como unidade.
+//! Desenvolvido por SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA.
 #![windows_subsystem = "windows"]
 
 use std::cell::RefCell;
@@ -19,15 +20,30 @@ use macread::dokan;
 use macread::fs::{self, Entry, FileSystem, Kind};
 use macread::fsservice::FsService;
 use macread::open::{self, Source};
+use macread::osdetect;
 use macread::partition::{self, FsKind};
 use macread::util::*;
 
-const TITLE: &str = "macread — Navegador de discos Mac e Linux";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const TITLE: &str = "macread — Navegador de discos Mac e Linux · SUDOMAKE";
+const COMPANY: &str = "SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA";
+const COMPANY_NIF: &str = "5002359936";
+const COMPANY_PHONE: &str = "932693623";
+const COMPANY_SITE: &str = "https://sudomakes.com";
+const REPO: &str = "https://github.com/arturjose0/macread";
 
 #[derive(Clone)]
 enum Node {
-    Info(String),
-    Volume { src: Source, label: String },
+    Info { title: String, details: String },
+    Volume { src: Source, title: String, details: String },
+}
+
+/// Descrição de um nó (partição/volume) antes de ser inserido na árvore.
+struct Child {
+    text: String,
+    node: Node,
+    os: Option<String>,
+    children: Vec<Child>,
 }
 
 struct Session {
@@ -57,6 +73,8 @@ struct Job {
 #[derive(Default)]
 struct App {
     window: nwg::Window,
+    title_font: nwg::Font,
+    small_font: nwg::Font,
     btn_refresh: nwg::Button,
     btn_image: nwg::Button,
     btn_up: nwg::Button,
@@ -65,20 +83,28 @@ struct App {
     btn_verify: nwg::Button,
     btn_mount: nwg::Button,
     btn_cancel: nwg::Button,
+    btn_about: nwg::Button,
     path_box: nwg::TextInput,
     tree: nwg::TreeView,
     list: nwg::ListView,
+    info_title: nwg::Label,
+    info_text: nwg::TextBox,
+    btn_open_here: nwg::Button,
+    btn_mount_here: nwg::Button,
     status: nwg::Label,
+    footer: nwg::Label,
+    btn_site: nwg::Button,
     progress: nwg::ProgressBar,
     notice: nwg::Notice,
     folder_dialog: nwg::FileDialog,
     image_dialog: nwg::FileDialog,
     nodes: RefCell<Vec<(isize, Node)>>,
     session: RefCell<Option<Session>>,
+    selected: RefCell<Option<(Source, String)>>,
     job: RefCell<Option<Job>>,
     images: RefCell<Vec<String>>,
     admin: bool,
-    mount: RefCell<Option<(dokan::Mount, Arc<FsService>)>>,
+    mount: RefCell<Option<(dokan::Mount, Arc<FsService>, Source)>>,
 }
 
 fn path_string(stack: &[Entry]) -> String {
@@ -93,6 +119,141 @@ fn path_string(stack: &[Entry]) -> String {
     s
 }
 
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+fn open_url(url: &str) {
+    use winapi::um::shellapi::ShellExecuteW;
+    use winapi::um::winuser::SW_SHOWNORMAL;
+    let verb = wide("open");
+    let u = wide(url);
+    unsafe {
+        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), u.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL);
+    }
+}
+
+fn company_line() -> String {
+    format!("{}  ·  NIF {}  ·  Tel. {}  ·  {}", COMPANY, COMPANY_NIF, COMPANY_PHONE, COMPANY_SITE.trim_start_matches("https://"))
+}
+
+fn welcome_text() -> String {
+    format!(
+        "À esquerda estão os discos ligados a este computador e as imagens abertas, com o sistema \
+         encontrado em cada partição (Windows, Linux, macOS, dados...).\r\n\r\n\
+         Clique numa partição ou volume marcado com ◄ e escolha:\r\n\
+         •  Abrir no programa: navegar pelas pastas e copiar arquivos para o Windows;\r\n\
+         •  Montar como unidade: o volume aparece no Explorador como uma letra de disco (somente leitura).\r\n\r\n\
+         Discos físicos exigem o programa aberto como Administrador. Nada é gravado no disco de origem.\r\n\r\n\
+         macread {}  —  desenvolvido por {}\r\nNIF {}  ·  Contacto {}  ·  {}",
+        VERSION, COMPANY, COMPANY_NIF, COMPANY_PHONE, COMPANY_SITE
+    )
+}
+
+/// Abre a origem e descreve cada partição/volume, detectando o sistema instalado.
+fn describe_source(spec: &str) -> Result<Vec<Child>, String> {
+    let dev = open::open_source(spec).map_err(|e| e.to_string())?;
+    let layout = partition::scan(&dev).map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for p in &layout.parts {
+        let name = if p.name.is_empty() { String::new() } else { format!(" \"{}\"", p.name) };
+        let base_text = format!("Partição {}: {}  {}{}", p.index, p.fs.name(), fmt_size(p.len), name);
+        let base = Source { spec: spec.to_string(), part: Some(p.index), vol: None, force: false };
+        let common = format!("Partição {} de {}\r\nTipo: {}\r\nTamanho: {}\r\nSistema de arquivos: {}", p.index, spec, p.type_name, fmt_size(p.len), p.fs.name());
+        match &p.fs {
+            FsKind::Apfs => {
+                let mut children = Vec::new();
+                let mut oses = Vec::new();
+                match apfs::Container::open(open::partition_device(&dev, p)) {
+                    Ok(c) => {
+                        for v in &c.volumes {
+                            let src = Source { vol: Some(v.index + 1), ..base.clone() };
+                            let (os, extra) = if v.encrypted {
+                                ("criptografado (FileVault)".to_string(), String::new())
+                            } else {
+                                match open::open(&src, true) {
+                                    Ok(o) => (osdetect::detect(o.fs.as_ref()), o.fs.summary()),
+                                    Err(e) => (format!("não foi possível abrir: {}", e), String::new()),
+                                }
+                            };
+                            let text = format!("Volume {}: \"{}\" — {}", v.index + 1, v.name, os);
+                            let details = format!(
+                                "{}\r\n\r\nVolume APFS {} \"{}\"\r\nFunção: {}\r\n{} arquivos, {} pastas{}\r\n{}\r\n\r\n{}",
+                                os,
+                                v.index + 1,
+                                v.name,
+                                v.role_name(),
+                                v.num_files,
+                                v.num_dirs,
+                                if v.encrypted { "\r\nCRIPTOGRAFADO: precisa da senha do FileVault (não suportado)" } else { "" },
+                                extra,
+                                common
+                            );
+                            if !v.encrypted {
+                                oses.push(os.clone());
+                            }
+                            let node = if v.encrypted { Node::Info { title: text.clone(), details } } else { Node::Volume { src, title: text.clone(), details } };
+                            children.push(Child { text, node, os: Some(os), children: Vec::new() });
+                        }
+                    }
+                    Err(e) => children.push(Child {
+                        text: format!("(erro: {})", e),
+                        node: Node::Info { title: "Erro".into(), details: e.to_string() },
+                        os: None,
+                        children: Vec::new(),
+                    }),
+                }
+                let text = format!("{}  (container APFS com {} volumes)", base_text, children.len());
+                out.push(Child {
+                    text: text.clone(),
+                    node: Node::Info { title: text, details: format!("Container APFS: escolha um dos volumes abaixo.\r\n\r\n{}", common) },
+                    os: oses.first().cloned(),
+                    children,
+                });
+            }
+            f if f.is_supported() => match open::open(&base, true) {
+                Ok(o) => {
+                    let os = osdetect::detect(o.fs.as_ref());
+                    let text = format!("{} — {}  {}", base_text, os, if f.is_mac() { "◄ Mac" } else { "◄ Linux" });
+                    let details = format!("{}\r\n\r\n{}\r\n\r\n{}", os, o.fs.summary(), common);
+                    out.push(Child { text: text.clone(), node: Node::Volume { src: base, title: text, details }, os: Some(os), children: Vec::new() });
+                }
+                Err(e) => {
+                    let text = format!("{} — não foi possível abrir", base_text);
+                    out.push(Child { text: text.clone(), node: Node::Info { title: text, details: format!("{}\r\n\r\n{}", e, common) }, os: None, children: Vec::new() });
+                }
+            },
+            _ => {
+                let purpose = osdetect::describe_partition(p);
+                let text = if purpose.is_empty() { base_text.clone() } else { format!("{} — {}", base_text, purpose) };
+                let details = format!(
+                    "{}\r\n\r\nEsta partição não pode ser aberta pelo macread{}.\r\n\r\n{}",
+                    if purpose.is_empty() { "Partição não legível".to_string() } else { purpose.clone() },
+                    match &p.fs {
+                        FsKind::Ntfs | FsKind::Fat | FsKind::ExFat => " (o próprio Windows já a lê, se estiver íntegra)",
+                        FsKind::Luks => " (criptografada; precisa da senha, ainda não suportado)",
+                        _ => "",
+                    },
+                    common
+                );
+                let os = match &p.fs {
+                    FsKind::Ntfs => Some("Windows".to_string()),
+                    FsKind::Luks => Some("Linux criptografado".to_string()),
+                    FsKind::Xfs | FsKind::Btrfs | FsKind::F2fs => Some("Linux".to_string()),
+                    _ => None,
+                };
+                out.push(Child { text: text.clone(), node: Node::Info { title: text, details }, os, children: Vec::new() });
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn short_os(os: &str) -> String {
+    let s = os.split(" (").next().unwrap_or(os).split(':').next().unwrap_or(os).trim();
+    s.to_string()
+}
+
 impl App {
     fn set_status(&self, text: &str) {
         self.status.set_text(text);
@@ -104,15 +265,16 @@ impl App {
         let top = 8;
         let bh = 30;
         let mut x = 8;
-        let buttons: [(&nwg::Button, i32); 8] = [
-            (&self.btn_refresh, 120),
+        let buttons: [(&nwg::Button, i32); 9] = [
+            (&self.btn_refresh, 118),
             (&self.btn_image, 150),
             (&self.btn_up, 80),
-            (&self.btn_copy_sel, 190),
-            (&self.btn_copy_all, 180),
-            (&self.btn_verify, 130),
-            (&self.btn_mount, 190),
-            (&self.btn_cancel, 90),
+            (&self.btn_copy_sel, 188),
+            (&self.btn_copy_all, 178),
+            (&self.btn_verify, 128),
+            (&self.btn_mount, 170),
+            (&self.btn_cancel, 88),
+            (&self.btn_about, 150),
         ];
         for (b, bw) in buttons {
             b.set_position(x, top);
@@ -120,23 +282,55 @@ impl App {
             x += bw + 6;
         }
         let y2 = top + bh + 10;
-        let tree_w = 360;
+        let bottom_h = 58;
+        let tree_w = 430;
         let right_x = tree_w + 16;
         let right_w = (w - right_x - 8).max(120);
+        let pane_h = (h - y2 - bottom_h - 8).max(80);
+        self.tree.set_position(8, y2);
+        self.tree.set_size(tree_w as u32, pane_h as u32);
+        // modo navegação
         self.path_box.set_position(right_x, y2);
         self.path_box.set_size(right_w as u32, 26);
-        let y3 = y2 + 34;
-        let bottom_h = 32;
-        let list_h = (h - y3 - bottom_h - 8).max(80);
-        self.tree.set_position(8, y2);
-        self.tree.set_size(tree_w as u32, (h - y2 - bottom_h - 8).max(80) as u32);
-        self.list.set_position(right_x, y3);
-        self.list.set_size(right_w as u32, list_h as u32);
+        self.list.set_position(right_x, y2 + 34);
+        self.list.set_size(right_w as u32, (pane_h - 34).max(60) as u32);
+        // modo informações
+        self.info_title.set_position(right_x, y2 + 6);
+        self.info_title.set_size(right_w as u32, 40);
+        self.info_text.set_position(right_x + 2, y2 + 56);
+        self.info_text.set_size((right_w - 4) as u32, (pane_h - 130).max(100) as u32);
+        let by = y2 + pane_h - 54;
+        self.btn_open_here.set_position(right_x, by);
+        self.btn_open_here.set_size(250, 44);
+        self.btn_mount_here.set_position(right_x + 262, by);
+        self.btn_mount_here.set_size(270, 44);
+        // rodapé
         let yb = h - bottom_h;
-        self.status.set_position(8, yb + 6);
-        self.status.set_size((w - 250).max(100) as u32, 24);
-        self.progress.set_position(w - 236, yb + 6);
+        self.status.set_position(8, yb + 4);
+        self.status.set_size((w - 252).max(100) as u32, 22);
+        self.progress.set_position(w - 236, yb + 5);
         self.progress.set_size(228, 20);
+        self.footer.set_position(8, yb + 32);
+        self.footer.set_size((w - 150).max(100) as u32, 22);
+        self.btn_site.set_position(w - 136, yb + 30);
+        self.btn_site.set_size(128, 24);
+    }
+
+    fn show_browser(&self, on: bool) {
+        self.path_box.set_visible(on);
+        self.list.set_visible(on);
+        self.info_title.set_visible(!on);
+        self.info_text.set_visible(!on);
+        self.btn_open_here.set_visible(!on);
+        self.btn_mount_here.set_visible(!on);
+    }
+
+    fn show_info(&self, title: &str, text: &str, actions: bool) {
+        self.info_title.set_text(title);
+        self.info_text.set_text(text);
+        self.btn_open_here.set_enabled(actions && self.job.borrow().is_none());
+        self.btn_mount_here.set_enabled(actions && self.job.borrow().is_none());
+        self.show_browser(false);
     }
 
     fn add_node(&self, parent: Option<&nwg::TreeItem>, text: &str, node: Node) -> nwg::TreeItem {
@@ -145,65 +339,49 @@ impl App {
         item
     }
 
-    /// Acrescenta as partições/volumes de uma origem (disco físico ou imagem) sob um nó da árvore.
-    fn add_source_tree(&self, parent: &nwg::TreeItem, spec: &str) {
-        let (dev, layout) = match open::open_source(spec).and_then(|dev| partition::scan(&dev).map(|l| (dev, l))) {
-            Ok(v) => v,
-            Err(e) => {
-                self.add_node(Some(parent), &format!("(erro: {})", e), Node::Info(e.to_string()));
-                return;
+    fn insert_children(&self, parent: &nwg::TreeItem, children: Vec<Child>) {
+        for c in children {
+            let item = self.add_node(Some(parent), &c.text, c.node);
+            if !c.children.is_empty() {
+                self.insert_children(&item, c.children);
+                self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
             }
-        };
-        if layout.parts.is_empty() {
-            self.add_node(Some(parent), "(sem partições)", Node::Info("Nenhuma partição encontrada.".into()));
         }
-        for p in &layout.parts {
-            let name = if p.name.is_empty() { String::new() } else { format!(" \"{}\"", p.name) };
-            let text = format!("Partição {}: {}  {}{}", p.index, p.fs.name(), fmt_size(p.len), name);
-            let base = Source { spec: spec.to_string(), part: Some(p.index), vol: None, force: false };
-            match &p.fs {
-                FsKind::Apfs => {
-                    let item = self.add_node(Some(parent), &format!("{}  (container APFS)", text), Node::Info(format!("{} — expanda para ver os volumes", text)));
-                    match apfs::Container::open(open::partition_device(&dev, p)) {
-                        Ok(c) => {
-                            for v in &c.volumes {
-                                let label = format!(
-                                    "Volume {}: \"{}\" ({}, {} arquivos){}",
-                                    v.index + 1,
-                                    v.name,
-                                    v.role_name(),
-                                    v.num_files,
-                                    if v.encrypted { "  [CRIPTOGRAFADO]" } else { "" }
-                                );
-                                let src = Source { vol: Some(v.index + 1), ..base.clone() };
-                                self.add_node(Some(&item), &label, Node::Volume { src, label: label.clone() });
-                            }
-                            self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
-                        }
-                        Err(e) => {
-                            self.add_node(Some(&item), &format!("(erro: {})", e), Node::Info(e.to_string()));
-                        }
+    }
+
+    fn os_summary(children: &[Child]) -> String {
+        let mut names: Vec<String> = Vec::new();
+        fn walk(list: &[Child], names: &mut Vec<String>) {
+            for c in list {
+                if let Some(os) = &c.os {
+                    let s = short_os(os);
+                    if !s.is_empty() && !names.contains(&s) && !s.starts_with("disco de dados") && s != "vazio" {
+                        names.push(s);
                     }
                 }
-                f if f.is_supported() => {
-                    let label = format!("{}{}", text, if f.is_mac() { "  ◄ Mac" } else { "  ◄ Linux" });
-                    self.add_node(Some(parent), &label, Node::Volume { src: base, label: text.clone() });
+                walk(&c.children, names);
+            }
+        }
+        walk(children, &mut names);
+        names.truncate(3);
+        names.join(" + ")
+    }
+
+    fn add_source(&self, root_text: &str, root_details: &str, spec: &str, expand: bool) {
+        match describe_source(spec) {
+            Ok(children) => {
+                let summary = Self::os_summary(&children);
+                let text = if summary.is_empty() { root_text.to_string() } else { format!("{}  —  {}", root_text, summary) };
+                let item = self.add_node(None, &text, Node::Info { title: root_text.to_string(), details: format!("{}\r\n\r\nSistemas encontrados: {}\r\n\r\nSelecione uma partição ou volume abaixo deste disco.", root_details, if summary.is_empty() { "nenhum reconhecido" } else { &summary }) });
+                self.insert_children(&item, children);
+                if expand {
+                    self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
                 }
-                FsKind::Luks => {
-                    self.add_node(Some(parent), &format!("{}  (criptografado: precisa da senha)", text), Node::Info(format!("{}: partição LUKS; não é possível ler sem a senha.", text)));
-                }
-                FsKind::Lvm => {
-                    self.add_node(Some(parent), &format!("{}  (os volumes lógicos aparecem abaixo)", text), Node::Info(format!("{}: volume físico LVM; use os volumes lógicos listados.", text)));
-                }
-                FsKind::Xfs | FsKind::Btrfs | FsKind::F2fs => {
-                    self.add_node(Some(parent), &format!("{}  (ainda não suportado)", text), Node::Info(format!("{}: este sistema de arquivos ainda não é suportado.", text)));
-                }
-                FsKind::CoreStorage => {
-                    self.add_node(Some(parent), &format!("{}  (não suportado)", text), Node::Info(format!("{}: Core Storage (FileVault antigo/Fusion Drive) não é suportado.", text)));
-                }
-                _ => {
-                    self.add_node(Some(parent), &text, Node::Info(format!("{}: não é uma partição Mac nem Linux legível.", text)));
-                }
+            }
+            Err(e) => {
+                let item = self.add_node(None, root_text, Node::Info { title: root_text.to_string(), details: format!("{}\r\n\r\nErro: {}", root_details, e) });
+                self.add_node(Some(&item), &format!("(erro: {})", e), Node::Info { title: "Erro".into(), details: e });
+                self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
             }
         }
     }
@@ -215,39 +393,37 @@ impl App {
         self.tree.clear();
         self.nodes.borrow_mut().clear();
         *self.session.borrow_mut() = None;
+        *self.selected.borrow_mut() = None;
         self.list.clear();
         self.path_box.set_text("");
+        self.show_info("Discos deste computador", "Procurando discos e identificando os sistemas instalados...", false);
         self.set_status("Procurando discos...");
         let disks = device::enumerate_disks();
         if disks.is_empty() {
-            self.add_node(None, "Nenhum disco físico encontrado", Node::Info("Nenhum disco físico encontrado.".into()));
+            self.add_node(None, "Nenhum disco físico encontrado", Node::Info { title: "Nenhum disco".into(), details: "Nenhum disco físico foi encontrado.".into() });
         }
         for d in disks {
-            let (model, size) = match &d.info {
-                Some(i) => (format!("{} [{}]", i.model, i.bus), fmt_size(i.size)),
-                None => ("?".to_string(), "?".to_string()),
+            let (model, bus, size, sector) = match &d.info {
+                Some(i) => (i.model.clone(), i.bus.clone(), fmt_size(i.size), i.sector),
+                None => ("?".to_string(), "?".to_string(), "?".to_string(), 0),
             };
-            let text = format!("Disco {}: {}  {}", d.number, model, size);
-            let item = self.add_node(None, &text, Node::Info(text.clone()));
+            let text = format!("Disco {}: {} [{}]  {}", d.number, model, bus, size);
+            let details = format!("Disco físico {} (\\\\.\\PhysicalDrive{})\r\nModelo: {}\r\nBarramento: {}\r\nTamanho: {}\r\nSetor: {} bytes", d.number, d.number, model, bus, size, sector);
             if !d.readable {
-                self.add_node(
-                    Some(&item),
-                    "(sem permissão: feche e execute como Administrador)",
-                    Node::Info("Para ler discos físicos o programa precisa ser executado como Administrador.".into()),
-                );
+                let item = self.add_node(None, &format!("{}  —  (sem permissão de Administrador)", text), Node::Info { title: text.clone(), details: format!("{}\r\n\r\nPara ler discos físicos o programa precisa ser executado como Administrador. Feche e abra de novo aceitando o pedido de permissão.", details) });
+                self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
             } else {
-                self.add_source_tree(&item, &format!("disco:{}", d.number));
+                self.add_source(&text, &details, &format!("disco:{}", d.number), true);
             }
-            self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
         }
         let images = self.images.borrow().clone();
         for img in images {
             let name = Path::new(&img).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| img.clone());
-            let item = self.add_node(None, &format!("Imagem: {}", name), Node::Info(img.clone()));
-            self.add_source_tree(&item, &img);
-            self.tree.set_expand_state(&item, nwg::ExpandState::Expand);
+            self.add_source(&format!("Imagem: {}", name), &format!("Arquivo de imagem\r\n{}", img), &img, true);
         }
-        self.set_status("Selecione uma partição ou volume à esquerda.");
+        self.show_info("Bem-vindo ao macread", &welcome_text(), false);
+        self.set_status("Selecione um disco, partição ou volume à esquerda.");
+        self.update_mount_buttons();
     }
 
     fn open_image(&self) {
@@ -275,27 +451,49 @@ impl App {
         let h = item.handle as isize;
         let node = self.nodes.borrow().iter().find(|(k, _)| *k == h).map(|(_, n)| n.clone());
         match node {
-            Some(Node::Volume { src, label }) => self.open_volume(src, label),
-            Some(Node::Info(s)) => self.set_status(&s),
+            Some(Node::Volume { src, title, details }) => {
+                *self.selected.borrow_mut() = Some((src.clone(), title.clone()));
+                let mounted_here = self.mount.borrow().as_ref().map_or(false, |(_, _, s)| *s == src);
+                let extra = if mounted_here { "\r\n\r\nEste volume está montado como unidade do Windows." } else { "" };
+                self.show_info(&title, &format!("{}{}\r\n\r\nO que deseja fazer com este volume?", details, extra), true);
+                self.update_mount_buttons();
+                self.set_status("Escolha \"Abrir no programa\" ou \"Montar como unidade\".");
+            }
+            Some(Node::Info { title, details }) => {
+                *self.selected.borrow_mut() = None;
+                self.show_info(&title, &details, false);
+                self.set_status(&title);
+            }
             None => {}
         }
+    }
+
+    fn open_selected(&self) {
+        let (src, label) = match self.selected.borrow().clone() {
+            Some(v) => v,
+            None => return,
+        };
+        self.open_volume(src, label);
     }
 
     fn open_volume(&self, src: Source, label: String) {
         if self.job.borrow().is_some() {
             return;
         }
-        if let Some(s) = self.session.borrow().as_ref() {
-            if s.src == src {
-                return;
-            }
+        let same = self.session.borrow().as_ref().map_or(false, |s| s.src == src);
+        if same {
+            self.show_browser(true);
+            self.list_current();
+            return;
         }
         self.set_status(&format!("Abrindo {}...", label));
         match open::open(&src, true) {
             Ok(o) => match o.fs.root() {
                 Ok(root) => {
                     *self.session.borrow_mut() = Some(Session { src, fs: o.fs, stack: vec![root], entries: Vec::new() });
+                    self.show_browser(true);
                     self.list_current();
+                    self.update_mount_buttons();
                 }
                 Err(e) => {
                     self.set_status("Erro ao abrir a pasta raiz.");
@@ -369,7 +567,7 @@ impl App {
             }
             Kind::File => {
                 let text = format!(
-                    "{}\n\nTamanho: {} ({} bytes)\nModificado: {}\nCriado: {}\nPermissões: {}{}\n\nSelecione o arquivo e use \"Copiar selecionados...\" para copiá-lo.",
+                    "{}\n\nTamanho: {} ({} bytes)\nModificado: {}\nCriado: {}\nPermissões: {}{}\n\nSelecione o arquivo e use \"Copiar selecionados...\" para copiá-lo, ou monte o volume como unidade para abri-lo diretamente.",
                     entry.name,
                     fmt_size(entry.size),
                     entry.size,
@@ -398,6 +596,8 @@ impl App {
         };
         if popped {
             self.list_current();
+        } else if self.session.borrow().is_some() {
+            self.show_browser(true);
         }
     }
 
@@ -413,13 +613,20 @@ impl App {
         self.session.borrow().as_ref().map(|s| (s.src.clone(), path_string(&s.stack)))
     }
 
-    fn copy_selected(&self) {
-        let (src, path) = match self.current_source() {
-            Some(v) => v,
+    fn need_session(&self, what: &str) -> Option<(Source, String)> {
+        match self.current_source() {
+            Some(v) => Some(v),
             None => {
-                nwg::modal_info_message(&self.window, "Copiar", "Abra primeiro um volume à esquerda.");
-                return;
+                nwg::modal_info_message(&self.window, what, "Abra primeiro um volume: selecione-o à esquerda e clique em \"Abrir no programa\".");
+                None
             }
+        }
+    }
+
+    fn copy_selected(&self) {
+        let (src, path) = match self.need_session("Copiar") {
+            Some(v) => v,
+            None => return,
         };
         let rows = self.list.selected_items();
         if rows.is_empty() {
@@ -437,12 +644,9 @@ impl App {
     }
 
     fn copy_all(&self) {
-        let (src, path) = match self.current_source() {
+        let (src, path) = match self.need_session("Copiar") {
             Some(v) => v,
-            None => {
-                nwg::modal_info_message(&self.window, "Copiar", "Abra primeiro um volume à esquerda.");
-                return;
-            }
+            None => return,
         };
         if let Some(dest) = self.choose_folder() {
             self.start_job(src, path, None, Some(dest));
@@ -450,42 +654,80 @@ impl App {
     }
 
     fn verify(&self) {
-        let (src, path) = match self.current_source() {
+        let (src, path) = match self.need_session("Verificar") {
             Some(v) => v,
-            None => {
-                nwg::modal_info_message(&self.window, "Verificar", "Abra primeiro um volume à esquerda.");
-                return;
-            }
+            None => return,
         };
         self.start_job(src, path, None, None);
     }
 
+    fn update_mount_buttons(&self) {
+        let mounted = self.mount.borrow().as_ref().map(|(m, _, _)| m.letter);
+        let text = match mounted {
+            Some(l) => format!("Desmontar {}:", l),
+            None => "Montar como unidade".to_string(),
+        };
+        self.btn_mount.set_text(&text);
+        self.btn_mount_here.set_text(&text);
+    }
+
+    fn unmount_current(&self) -> Option<char> {
+        let current = self.mount.borrow_mut().take();
+        if let Some((m, svc, _)) = current {
+            let letter = m.letter;
+            m.unmount();
+            svc.stop();
+            self.update_mount_buttons();
+            return Some(letter);
+        }
+        None
+    }
+
+    /// Botão da barra: age sobre o volume aberto (ou, se nenhum, sobre o selecionado).
     fn toggle_mount(&self) {
         if self.job.borrow().is_some() {
             return;
         }
-        let current = self.mount.borrow_mut().take();
-        if let Some((m, svc)) = current {
-            let letter = m.letter;
-            m.unmount();
-            svc.stop();
-            self.btn_mount.set_text("Montar como unidade");
-            self.set_status(&format!("Unidade {}: desmontada.", letter));
+        if self.mount.borrow().is_some() {
+            if let Some(l) = self.unmount_current() {
+                self.set_status(&format!("Unidade {}: desmontada.", l));
+            }
             return;
         }
-        let src = match self.session.borrow().as_ref() {
-            Some(s) => s.src.clone(),
+        let src = self.current_source().map(|(s, _)| s).or_else(|| self.selected.borrow().clone().map(|(s, _)| s));
+        match src {
+            Some(s) => self.mount_source(s),
             None => {
-                nwg::modal_info_message(&self.window, "Montar", "Abra primeiro um volume à esquerda; ele será montado como uma unidade do Windows.");
-                return;
+                nwg::modal_info_message(&self.window, "Montar", "Selecione à esquerda o volume que deseja montar como unidade.");
             }
+        }
+    }
+
+    /// Botão do painel: age sobre o volume selecionado na árvore.
+    fn mount_selected(&self) {
+        if self.job.borrow().is_some() {
+            return;
+        }
+        if self.mount.borrow().is_some() {
+            if let Some(l) = self.unmount_current() {
+                self.set_status(&format!("Unidade {}: desmontada.", l));
+            }
+            return;
+        }
+        let src = match self.selected.borrow().clone() {
+            Some((s, _)) => s,
+            None => return,
         };
+        self.mount_source(src);
+    }
+
+    fn mount_source(&self, src: Source) {
         if let Err(e) = dokan::available() {
             nwg::modal_error_message(
                 &self.window,
                 "Driver Dokan necessário",
                 &format!(
-                    "Para montar o volume como uma unidade do Windows é preciso o driver Dokan 2 (gratuito, código aberto).\n\n{}\n\nBaixe o instalador DokanSetup.exe em https://github.com/dokan-dev/dokany/releases, instale e tente de novo. As outras funções (navegar e copiar) não precisam dele.",
+                    "Para montar o volume como uma unidade do Windows é preciso o driver Dokan 2 (gratuito, código aberto).\n\n{}\n\nO instalador do macread oferece a instalação do Dokan; também pode baixá-lo em https://github.com/dokan-dev/dokany/releases (DokanSetup.exe). As outras funções (navegar e copiar) não precisam dele.",
                     e
                 ),
             );
@@ -499,7 +741,7 @@ impl App {
             }
         };
         self.set_status(&format!("Montando como {}:...", letter));
-        let svc = match FsService::start(src, 0) {
+        let svc = match FsService::start(src.clone(), 0) {
             Ok(s) => Arc::new(s),
             Err(e) => {
                 nwg::modal_error_message(&self.window, "Montar", &e.to_string());
@@ -508,8 +750,8 @@ impl App {
         };
         match dokan::mount(svc.clone(), letter, self.admin) {
             Ok(m) => {
-                *self.mount.borrow_mut() = Some((m, svc));
-                self.btn_mount.set_text(&format!("Desmontar {}:", letter));
+                *self.mount.borrow_mut() = Some((m, svc, src));
+                self.update_mount_buttons();
                 self.set_status(&format!("Unidade {}: montada (somente leitura). Clique em \"Desmontar\" antes de remover o disco.", letter));
                 let _ = std::process::Command::new("explorer.exe").arg(format!("{}:\\", letter)).spawn();
             }
@@ -521,13 +763,28 @@ impl App {
         }
     }
 
+    fn about(&self) {
+        let text = format!(
+            "macread {}\nNavegador de discos Mac (APFS, HFS+) e Linux (ext2/3/4, LVM) para Windows.\n\n\
+             Desenvolvido por\n{}\nNIF: {}\nContacto: {}\nSite: {}\n\n\
+             Código aberto (licença MIT):\n{}\n\n\
+             A montagem como unidade usa o driver Dokan 2 (https://github.com/dokan-dev/dokany).",
+            VERSION, COMPANY, COMPANY_NIF, COMPANY_PHONE, COMPANY_SITE, REPO
+        );
+        nwg::modal_info_message(&self.window, "Sobre o macread", &text);
+    }
+
     fn set_busy(&self, busy: bool) {
-        for b in [&self.btn_refresh, &self.btn_image, &self.btn_up, &self.btn_copy_sel, &self.btn_copy_all, &self.btn_verify, &self.btn_mount] {
+        for b in [&self.btn_refresh, &self.btn_image, &self.btn_up, &self.btn_copy_sel, &self.btn_copy_all, &self.btn_verify, &self.btn_mount, &self.btn_open_here, &self.btn_mount_here] {
             b.set_enabled(!busy);
         }
         self.btn_cancel.set_enabled(busy);
         self.progress.set_visible(busy);
         self.progress.set_marquee(busy, 30);
+        if !busy && self.selected.borrow().is_none() {
+            self.btn_open_here.set_enabled(false);
+            self.btn_mount_here.set_enabled(false);
+        }
     }
 
     fn start_job(&self, src: Source, dir_path: String, names: Option<Vec<String>>, dest: Option<PathBuf>) {
@@ -680,10 +937,6 @@ fn is_admin() -> bool {
     }
 }
 
-fn wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
 /// Reinicia o programa pedindo privilégios de Administrador (UAC). Devolve true se conseguiu.
 fn relaunch_as_admin() -> bool {
     use winapi::um::shellapi::ShellExecuteW;
@@ -704,9 +957,11 @@ fn build() -> Result<Rc<App>, nwg::NwgError> {
     app.admin = is_admin();
 
     let _ = nwg::Font::set_global_family("Segoe UI");
+    nwg::Font::builder().family("Segoe UI").size(28).weight(700).build(&mut app.title_font)?;
+    nwg::Font::builder().family("Segoe UI").size(14).build(&mut app.small_font)?;
     nwg::Window::builder()
-        .size((1300, 720))
-        .position((120, 80))
+        .size((1320, 740))
+        .position((100, 60))
         .title(TITLE)
         .flags(nwg::WindowFlags::MAIN_WINDOW | nwg::WindowFlags::VISIBLE)
         .build(&mut app.window)?;
@@ -719,6 +974,7 @@ fn build() -> Result<Rc<App>, nwg::NwgError> {
     nwg::Button::builder().text("Verificar leitura").parent(&app.window).build(&mut app.btn_verify)?;
     nwg::Button::builder().text("Montar como unidade").parent(&app.window).build(&mut app.btn_mount)?;
     nwg::Button::builder().text("Cancelar").parent(&app.window).enabled(false).build(&mut app.btn_cancel)?;
+    nwg::Button::builder().text("Sobre / SUDOMAKE").parent(&app.window).build(&mut app.btn_about)?;
 
     nwg::TextInput::builder().parent(&app.window).readonly(true).text("").build(&mut app.path_box)?;
     nwg::TreeView::builder().parent(&app.window).build(&mut app.tree)?;
@@ -737,7 +993,19 @@ fn build() -> Result<Rc<App>, nwg::NwgError> {
         });
     }
 
+    nwg::Label::builder().parent(&app.window).text("Bem-vindo ao macread").font(Some(&app.title_font)).v_align(nwg::VTextAlign::Top).build(&mut app.info_title)?;
+    nwg::TextBox::builder()
+        .parent(&app.window)
+        .text("")
+        .readonly(true)
+        .flags(nwg::TextBoxFlags::VISIBLE | nwg::TextBoxFlags::VSCROLL | nwg::TextBoxFlags::AUTOVSCROLL | nwg::TextBoxFlags::TAB_STOP)
+        .build(&mut app.info_text)?;
+    nwg::Button::builder().text("Abrir no programa").parent(&app.window).enabled(false).build(&mut app.btn_open_here)?;
+    nwg::Button::builder().text("Montar como unidade").parent(&app.window).enabled(false).build(&mut app.btn_mount_here)?;
+
     nwg::Label::builder().parent(&app.window).text("Pronto.").build(&mut app.status)?;
+    nwg::Label::builder().parent(&app.window).text(&company_line()).font(Some(&app.small_font)).build(&mut app.footer)?;
+    nwg::Button::builder().text("sudomakes.com").parent(&app.window).font(Some(&app.small_font)).build(&mut app.btn_site)?;
     nwg::ProgressBar::builder()
         .parent(&app.window)
         .flags(nwg::ProgressBarFlags::VISIBLE | nwg::ProgressBarFlags::MARQUEE)
@@ -778,10 +1046,7 @@ fn build() -> Result<Rc<App>, nwg::NwgError> {
                         }
                         a.cancel_job();
                     }
-                    if let Some((m, svc)) = a.mount.borrow_mut().take() {
-                        m.unmount();
-                        svc.stop();
-                    }
+                    a.unmount_current();
                     nwg::stop_thread_dispatch();
                 }
             }
@@ -802,6 +1067,14 @@ fn build() -> Result<Rc<App>, nwg::NwgError> {
                     a.toggle_mount();
                 } else if handle == a.btn_cancel.handle {
                     a.cancel_job();
+                } else if handle == a.btn_about.handle {
+                    a.about();
+                } else if handle == a.btn_open_here.handle {
+                    a.open_selected();
+                } else if handle == a.btn_mount_here.handle {
+                    a.mount_selected();
+                } else if handle == a.btn_site.handle {
+                    open_url(COMPANY_SITE);
                 }
             }
             E::OnTreeItemSelectionChanged => {
@@ -825,6 +1098,7 @@ fn build() -> Result<Rc<App>, nwg::NwgError> {
         }
     });
     app.layout();
+    app.show_browser(false);
     Ok(app)
 }
 
@@ -847,7 +1121,6 @@ fn main() {
             return;
         }
     };
-    // imagens passadas na linha de comando (ou arrastadas sobre o executável)
     for arg in std::env::args().skip(1) {
         if !arg.starts_with("--") && Path::new(&arg).is_file() {
             app.images.borrow_mut().push(arg);

@@ -9,7 +9,7 @@ use macread::fs::{self, Entry, FileSystem, Kind};
 use macread::open::{open_fs, open_physical, open_source, partition_device, select_partition};
 use macread::partition::{self, FsKind, Layout};
 use macread::util::*;
-use macread::{apfs, copy, device, dokan, ext4, fsservice, hfsplus};
+use macread::{apfs, copy, device, dokan, ext4, fsservice, hfsplus, osdetect};
 use macread::open::Source;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -52,6 +52,10 @@ EXEMPLOS:
   macread ls disco:1 /Users
   macread copiar disco:1 /Users/joao/Documents D:\Recuperado
   macread copiar disco:1 / D:\Recuperado\Tudo -v 2
+
+Desenvolvido por SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA
+NIF 5002359936 · Contacto 932693623 · https://sudomakes.com
+Código aberto (MIT): https://github.com/arturjose0/macread
 "#,
         v = VERSION
     );
@@ -160,8 +164,34 @@ fn cmd_discos() -> io::Result<()> {
             println!("  (sem permissão para ler; execute como Administrador para ver as partições)");
             continue;
         }
-        match open_physical(d.number).and_then(|dev| partition::scan(&dev)) {
-            Ok(layout) => print_layout(&layout, "  "),
+        match open_physical(d.number).and_then(|dev| partition::scan(&dev).map(|l| (dev, l))) {
+            Ok((dev, layout)) => {
+                print_layout(&layout, "  ");
+                for p in layout.parts.iter().filter(|p| p.fs.is_supported()) {
+                    let src = macread::open::Source { spec: format!("disco:{}", d.number), part: Some(p.index), vol: None, force: false };
+                    match &p.fs {
+                        FsKind::Apfs => {
+                            if let Ok(c) = apfs::Container::open(partition_device(&dev, p)) {
+                                for v in &c.volumes {
+                                    if v.encrypted {
+                                        println!("      partição {} volume {} \"{}\": criptografado (FileVault)", p.index, v.index + 1, v.name);
+                                        continue;
+                                    }
+                                    let s = macread::open::Source { vol: Some(v.index + 1), ..src.clone() };
+                                    if let Ok(o) = macread::open::open(&s, true) {
+                                        println!("      partição {} volume {} \"{}\": {}", p.index, v.index + 1, v.name, osdetect::detect(o.fs.as_ref()));
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            if let Ok(o) = macread::open::open(&src, true) {
+                                println!("      partição {}: {}", p.index, osdetect::detect(o.fs.as_ref()));
+                            }
+                        }
+                    }
+                }
+            }
             Err(e) => println!("  erro ao ler a tabela de partições: {}", e),
         }
     }

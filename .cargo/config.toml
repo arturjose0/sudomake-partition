@@ -1,0 +1,3 @@
+# Executáveis sem dependência do runtime do Visual C++ (vcruntime140.dll) quando compilados com MSVC.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

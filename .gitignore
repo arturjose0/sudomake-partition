@@ -5,3 +5,4 @@ macread-log.txt
 *.img
 *.raw
 *.dmg
+/dist

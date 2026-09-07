@@ -13,5 +13,6 @@ pub mod hfsplus;
 pub mod lvm;
 pub mod lzvn;
 pub mod open;
+pub mod osdetect;
 pub mod partition;
 pub mod util;

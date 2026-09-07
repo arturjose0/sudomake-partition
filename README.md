@@ -10,11 +10,22 @@
 > from the [Releases page](https://github.com/arturjose0/macread/releases/latest); the rest of
 > this document is in Portuguese. Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Baixar
+Desenvolvido por **SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA** · NIF 5002359936 ·
+Contacto 932693623 · <https://sudomakes.com>
 
-Vá à página de [**Releases**](https://github.com/arturjose0/macread/releases/latest) e baixe
-`macread-windows-x64.zip` (contém `macread-gui.exe`, `macread.exe` e este manual). Não há
-instalação: descompacte numa pasta e execute. Windows 10/11 de 64 bits.
+## Baixar e instalar
+
+Na página de [**Releases**](https://github.com/arturjose0/macread/releases/latest) há duas opções
+(Windows 10/11 de 64 bits):
+
+* **`macread-setup-x.y.z.exe`** (recomendado): instalador. Pergunta se instala só para o seu
+  utilizador ou para todos os utilizadores do computador, cria atalhos e um desinstalador, e
+  **verifica as dependências**: se o driver Dokan 2 (necessário só para montar discos como
+  unidade) não estiver instalado, oferece descarregá-lo da página oficial (~9 MB) e instalá-lo
+  automaticamente. Funciona num Windows recém-instalado, sem nada pré-instalado; os próprios
+  executáveis não dependem de runtimes.
+* **`macread-windows-x64.zip`**: versão portátil (`macread-gui.exe`, `macread.exe`, manual).
+  Descompacte numa pasta e execute; sem o Dokan, a montagem como unidade fica indisponível.
 
 `macread` lê **diretamente** o conteúdo de discos formatados pelo macOS (**APFS** e
 **HFS+/HFSX**) e pelo Linux (**ext2/ext3/ext4**, inclusive dentro de volumes **LVM**) a partir
@@ -34,10 +45,16 @@ Dois programas prontos, sem dependências:
 
 ## Interface gráfica (macread-gui.exe)
 
-* À esquerda, a árvore mostra cada disco físico com suas partições (e, no APFS, os volumes;
-  no LVM, os volumes lógicos). Clique numa partição marcada com `◄ Mac` ou `◄ Linux`.
-* À direita aparece o conteúdo da pasta: dê dois cliques numa pasta para entrar, use
-  **▲ Acima** para voltar; dois cliques num arquivo mostram tamanho, datas e permissões.
+* Ao abrir, a árvore à esquerda mostra cada disco ligado ao computador, com o **sistema
+  encontrado em cada partição**: `Ubuntu 22.04.4 LTS (sistema Linux)`, `macOS 12.5.1`,
+  `Windows (NTFS)`, `EFI (inicialização)`, `Backup do Time Machine`, `disco de dados`… O disco
+  recebe um resumo (por exemplo `Windows + Ubuntu`). No APFS aparecem os volumes; no LVM, os
+  volumes lógicos.
+* Clique numa partição ou volume marcado com `◄ Mac` ou `◄ Linux`: o painel da direita mostra
+  os detalhes e pergunta o que fazer: **Abrir no programa** (navegar e copiar) ou
+  **Montar como unidade** (letra de disco no Explorador, somente leitura).
+* Ao abrir no programa, a lista mostra o conteúdo da pasta: dois cliques numa pasta para
+  entrar, **▲ Acima** para voltar; dois cliques num arquivo mostram tamanho, datas e permissões.
 * **Copiar selecionados para...** copia os itens marcados na lista (Ctrl/Shift para vários);
   **Copiar pasta atual para...** copia a pasta inteira; **Verificar leitura** lê tudo sem
   gravar, para conferir se o disco está íntegro. O progresso aparece na barra inferior e
@@ -198,8 +215,13 @@ cargo +stable-x86_64-pc-windows-gnu build --release
 
 Os executáveis ficam em `target\release\macread.exe` e `target\release\macread-gui.exe`.
 Se o Visual Studio Build Tools estiver instalado, `cargo build --release` com a toolchain
-MSVC padrão também funciona. A interface usa a biblioteca `native-windows-gui` (controles
-nativos do Windows, sem runtime extra).
+MSVC padrão também funciona (com CRT estático, configurado em `.cargo/config.toml`). A
+interface usa a biblioteca `native-windows-gui` (controles nativos do Windows, sem runtime
+extra).
+
+O instalador é gerado com o [Inno Setup 6](https://jrsoftware.org/isinfo.php) a partir de
+`installer\macread.iss` (`ISCC.exe installer\macread.iss` cria `dist\macread-setup-x.y.z.exe`);
+o GitHub Actions faz isso automaticamente a cada release.
 
 Testes unitários (decodificador LZVN validado contra o codificador LZFSE de referência,
 containers decmpfs sintéticos, metadados LVM, nomes, datas):
@@ -226,7 +248,9 @@ Conteúdo comparado byte a byte com o extraído pelo 7-Zip 26 (que também lê A
 * discos físicos via `\\.\PhysicalDrive` com privilégios de Administrador: SSD Windows (GPT com
   10 partições) e disco USB Ubuntu (EFI + ext4: `/etc` e `/usr/share`, 83.399 arquivos, lidos
   sem erro);
-* interface gráfica testada por automação de teclado (abrir volume, navegar, copiar);
+* interface gráfica testada por automação (abrir volume, navegar, copiar, montar);
+* instalador testado em instalação silenciosa por utilizador (ficheiros, atalhos, registro,
+  PATH) e desinstalação;
 * montagem Dokan: imagem ext4 montada como `W:`, listagem, pasta com 3.000 arquivos,
   caminhos profundos, nomes Unicode e hashes SHA-1 de arquivos de 20 MB, 40 MB (esparso) e
   4 KB idênticos aos originais lidos pelo Windows.
@@ -263,6 +287,12 @@ Bibliotecas usadas: `flate2` (zlib), `lzfse_rust` (LZFSE), `bzip2-rs`, `lzma-rs`
 `unicode-normalization` (comparação de nomes NFD), `native-windows-gui` (interface),
 `winapi` (chamadas do Windows). Decodificadores LZVN e ADC próprios; ligação ao Dokan feita
 à mão (sem SDK) a partir do `dokan.h` 2.3.1.
+
+## Sobre a SUDOMAKE
+
+O macread é desenvolvido e mantido pela **SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA**
+(NIF 5002359936). Contacto: 932693623 · <https://sudomakes.com>. O botão **Sobre / SUDOMAKE**
+na interface mostra estes dados e a versão instalada.
 
 ## Contribuir
 

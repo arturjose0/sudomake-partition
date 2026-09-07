@@ -1,6 +1,6 @@
 [package]
 name = "macread"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "Lê e copia arquivos de discos de Mac (APFS e HFS+) diretamente no Windows"
 
@@ -9,7 +9,7 @@ bzip2-rs = "0.1.2"
 flate2 = "1"
 lzfse_rust = "0.2"
 lzma-rs = "0.3.0"
-native-windows-gui = { version = "1.0", features = ["file-dialog", "list-view", "tree-view", "progress-bar", "notice", "menu", "status-bar", "tooltip", "textbox", "cursor"] }
+native-windows-gui = { version = "1.0", features = ["file-dialog", "list-view", "tree-view", "progress-bar", "notice", "menu", "status-bar", "tooltip", "textbox", "cursor", "rich-textbox"] }
 unicode-normalization = "0.1"
 winapi = { version = "0.3", features = ["shellapi", "winuser", "shellscalingapi", "processthreadsapi", "securitybaseapi", "handleapi", "fileapi", "minwinbase", "libloaderapi", "consoleapi", "winnt", "errhandlingapi"] }
 
