@@ -5,7 +5,7 @@
 ; unidade) e, se faltar, descarrega-o da página oficial e instala-o.
 
 #define AppName "SUDOMAKE Partition"
-#define AppVersion "1.3.0"
+#define AppVersion "1.3.1"
 #define Author "José Artur Kassala"
 #define Company "SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA"
 #define CompanyNif "5002359936"
@@ -51,6 +51,7 @@ MinVersion=10.0
 OutputDir=..\dist
 OutputBaseFilename=sudomake-partition-setup-{#AppVersion}
 SetupIconFile=sudomake-partition.ico
+WizardSmallImageFile=wizard-small.bmp
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

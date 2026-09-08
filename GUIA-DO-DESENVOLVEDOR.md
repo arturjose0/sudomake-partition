@@ -57,7 +57,7 @@ seguintes demoram segundos. Só o que mudou é recompilado.
 | `target\release\sudomake-partition.exe` | linha de comando |
 | `target\debug\...` | os mesmos, em modo *debug* (mais lentos, com mais verificações), se compilar sem `--release` |
 | `SudomakePartition.exe` e `sudomake-partition.exe` na raiz | cópias feitas pelo `build.cmd` |
-| `dist\sudomake-partition-setup-1.3.0.exe` | o instalador, depois de correr o Inno Setup (secção 7) |
+| `dist\sudomake-partition-setup-1.3.1.exe` | o instalador, depois de correr o Inno Setup (secção 7) |
 
 A pasta `target\` pode ficar com mais de 1 GB; pode apagá-la sem problema (`cargo clean`),
 tudo é recriado na próxima compilação. `target\`, `dist\`, `*.exe` e `*.zip` estão no
@@ -151,11 +151,15 @@ sistema, espaço livre) → função `describe_source`, que corre numa thread se
 função `detect` (procura `/etc/os-release`, `SystemVersion.plist`, `/home`, `/Users`…) e
 `classify_partition` (EFI, Windows, swap…).
 
-**Ícone** → substitua `installer/sudomake-partition.ico` (deve conter os tamanhos 16, 32, 48
-e 256). O instalador e os atalhos usam-no; o `.exe` em si não tem ícone embutido.
+**Ícone / logótipo** → a origem é `imagens/favicon.png`. O script gera
+`installer/sudomake-partition.ico` (tamanhos 16 a 256), `installer/wizard-small.bmp` (imagem
+do assistente do instalador) e `docs/logo.png` (README). O `build.rs` embute o `.ico` nos dois
+executáveis (ícone da janela, da barra de tarefas e do Explorador) sem precisar de `rc.exe`
+nem `windres`; o ecrã inicial desenha o mesmo ícone no canto superior direito. Para mudar o
+logótipo basta substituir o PNG e voltar a gerar os ficheiros.
 
-**Versão nova** → mude o número em **dois** sítios: `Cargo.toml` (`version = "1.3.0"`) e
-`installer/sudomake-partition.iss` (`#define AppVersion "1.3.0"`). A interface, a linha de
+**Versão nova** → mude o número em **dois** sítios: `Cargo.toml` (`version = "1.3.1"`) e
+`installer/sudomake-partition.iss` (`#define AppVersion "1.3.1"`). A interface, a linha de
 comando e o instalador lêem daí.
 
 ## 6. Enviar para o GitHub
@@ -194,22 +198,22 @@ Summary → *Commit to main* → *Push origin*).
 
    ```text
    git add -A
-   git commit -m "SUDOMAKE Partition 1.3.0: o que mudou"
+   git commit -m "SUDOMAKE Partition 1.3.1: o que mudou"
    git push
-   git tag v1.3.0
-   git push origin v1.3.0
+   git tag v1.3.1
+   git push origin v1.3.1
    ```
 
 4. A *tag* `v*` faz o GitHub Actions compilar, testar, criar o instalador e publicar
-   automaticamente a release com quatro ficheiros: `sudomake-partition-setup-1.3.0.exe`,
+   automaticamente a release com quatro ficheiros: `sudomake-partition-setup-1.3.1.exe`,
    `sudomake-partition-windows-x64.zip`, `sudomake-partition.exe` e `SudomakePartition.exe`.
    Demora uns 3 a 5 minutos.
 5. Abra <https://github.com/arturjose0/sudomake-partition/releases>, clique no lápis da
    release nova e escreva as novidades (em português e uma linha em inglês). Marque
    *Set as the latest release*.
 
-Se se enganou na *tag*: `git tag -d v1.3.0` apaga localmente e
-`git push origin :refs/tags/v1.3.0` apaga no GitHub; depois crie de novo.
+Se se enganou na *tag*: `git tag -d v1.3.1` apaga localmente e
+`git push origin :refs/tags/v1.3.1` apaga no GitHub; depois crie de novo.
 
 ## 7. Criar o instalador
 
@@ -229,7 +233,7 @@ cargo +stable-x86_64-pc-windows-gnu build --release
 O resultado é `dist\sudomake-partition-setup-<versão>.exe`. Para testar sem cliques:
 
 ```text
-dist\sudomake-partition-setup-1.3.0.exe /VERYSILENT /CURRENTUSER /NORESTART
+dist\sudomake-partition-setup-1.3.1.exe /VERYSILENT /CURRENTUSER /NORESTART
 ```
 
 instala em `%LOCALAPPDATA%\Programs\SUDOMAKE Partition`; para desinstalar,

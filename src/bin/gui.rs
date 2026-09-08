@@ -220,12 +220,13 @@ struct TileState {
     content_h: i32,
     dark: bool,
     icons: [HICON; 3],
+    logo: HICON,
     signature: String,
 }
 
 impl Default for TileState {
     fn default() -> Self {
-        TileState { sections: Vec::new(), selected: None, scroll: 0, content_h: 0, dark: false, icons: [std::ptr::null_mut(); 3], signature: String::new() }
+        TileState { sections: Vec::new(), selected: None, scroll: 0, content_h: 0, dark: false, icons: [std::ptr::null_mut(); 3], logo: std::ptr::null_mut(), signature: String::new() }
     }
 }
 
@@ -373,6 +374,12 @@ extern "system" {
     fn PrivateExtractIconsW(file: *const u16, index: i32, cx: i32, cy: i32, icons: *mut HICON, ids: *mut u32, n: u32, flags: u32) -> u32;
 }
 
+/// Ícone do programa (recurso embutido pelo build.rs, ID 1) no tamanho pedido.
+unsafe fn app_icon(size: i32) -> HICON {
+    use winapi::um::libloaderapi::GetModuleHandleW;
+    winuser::LoadImageW(GetModuleHandleW(std::ptr::null()), 1 as *const u16, winuser::IMAGE_ICON, size, size, 0) as HICON
+}
+
 /// Ícone de unidade do próprio Windows (fixo/removível), no tamanho pedido.
 unsafe fn stock_icon(siid: u32, size: i32) -> HICON {
     use winapi::um::shellapi::{SHGetStockIconInfo, SHSTOCKICONINFO, SHGSI_ICONLOCATION};
@@ -424,6 +431,10 @@ unsafe fn paint_tiles(hwnd: HWND, st: &mut TileState) {
     if st.icons[0].is_null() {
         st.icons = [stock_icon(8, s(48)), stock_icon(7, s(48)), stock_icon(8, s(48))];
     }
+    if st.logo.is_null() {
+        st.logo = app_icon(s(64));
+    }
+    let logo_w = if st.logo.is_null() { 0 } else { s(64) + s(16) };
 
     let tile_w = s(TILE_W);
     let tile_h = s(TILE_H);
@@ -432,7 +443,7 @@ unsafe fn paint_tiles(hwnd: HWND, st: &mut TileState) {
     let cols = ((w - margin) / (tile_w + gap)).max(1);
     let mut y = margin - st.scroll;
     for (si, sec) in st.sections.iter_mut().enumerate() {
-        let mut hr = RECT { left: margin, top: y, right: w - margin, bottom: y + s(30) };
+        let mut hr = RECT { left: margin, top: y, right: w - margin - logo_w, bottom: y + s(30) };
         draw_text(mem, &sec.title, &mut hr, f_header, pal.header, winuser::DT_LEFT | winuser::DT_SINGLELINE | winuser::DT_END_ELLIPSIS);
         y += s(38);
         for (ti, tile) in sec.tiles.iter_mut().enumerate() {
@@ -491,6 +502,15 @@ unsafe fn paint_tiles(hwnd: HWND, st: &mut TileState) {
         y += rows.max(0) * (tile_h + gap) + s(16);
     }
     st.content_h = y + st.scroll;
+
+    // logótipo fixo no canto superior direito
+    if !st.logo.is_null() {
+        let lsz = s(64);
+        let lx = w - margin - lsz;
+        let bg = RECT { left: lx - s(8), top: 0, right: w, bottom: s(8) + lsz + s(8) };
+        fill(mem, &bg, pal.bg);
+        winuser::DrawIconEx(mem, lx, s(8), st.logo, lsz, lsz, 0, std::ptr::null_mut(), 0x0003);
+    }
 
     wingdi::BitBlt(hdc, 0, 0, w, h, mem, 0, 0, wingdi::SRCCOPY);
     wingdi::SelectObject(mem, old_bmp);
@@ -1803,6 +1823,18 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
         .title(i18n::APP_NAME)
         .flags(nwg::WindowFlags::MAIN_WINDOW | nwg::WindowFlags::VISIBLE)
         .build(&mut app.window)?;
+    if let Some(h) = app.window.handle.hwnd() {
+        unsafe {
+            let small = app_icon(16);
+            let big = app_icon(32);
+            if !small.is_null() {
+                winuser::SendMessageW(h, winuser::WM_SETICON, winuser::ICON_SMALL as usize, small as LPARAM);
+            }
+            if !big.is_null() {
+                winuser::SendMessageW(h, winuser::WM_SETICON, winuser::ICON_BIG as usize, big as LPARAM);
+            }
+        }
+    }
 
     for b in [
         &mut app.btn_home,

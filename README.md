@@ -1,3 +1,4 @@
+<p align="center"><img src="docs/logo.png" alt="SUDOMAKE Partition" width="128"></p>
 <h1 align="center">SUDOMAKE Partition</h1>
 
 <p align="center"><b>Ler, copiar e montar discos de Mac (APFS, HFS+) e Linux (ext4, ext3, ext2, LVM) no Windows — grátis, código aberto, feito em Angola 🇦🇴</b><br>
