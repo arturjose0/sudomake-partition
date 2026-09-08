@@ -1,6 +1,6 @@
 [package]
 name = "sudomake-partition"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 description = "SUDOMAKE Partition: lê, copia e monta discos Mac (APFS, HFS+) e Linux (ext2/3/4, LVM) e imagens DMG no Windows. Feito em Angola."
 license = "MIT"

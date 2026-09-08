@@ -94,6 +94,29 @@ table! {
     btn_mount => ["Montar como unidade", "Mount as drive", "Monter comme lecteur", "Montar como unidad"],
     btn_unmount => ["Desmontar {0}:", "Unmount {0}:", "Démonter {0}:", "Desmontar {0}:"],
     btn_cancel => ["Cancelar", "Cancel", "Annuler", "Cancelar"],
+    btn_copy_disk => ["Copiar disco completo...", "Copy entire disk...", "Copier le disque entier...", "Copiar disco completo..."],
+    copy_disk_title => ["Copiar disco completo", "Copy entire disk", "Copier le disque entier", "Copiar disco completo"],
+    copy_disk_confirm => [
+        "Copiar todo o conteúdo de {0} ({1} usados) para a pasta:\n{2}\n\nEspaço livre no destino: {3}.\n\nContinuar?",
+        "Copy the entire contents of {0} ({1} used) to the folder:\n{2}\n\nFree space at destination: {3}.\n\nContinue?",
+        "Copier tout le contenu de {0} ({1} utilisés) vers le dossier :\n{2}\n\nEspace libre à destination : {3}.\n\nContinuer ?",
+        "¿Copiar todo el contenido de {0} ({1} usados) a la carpeta:\n{2}\n\nEspacio libre en el destino: {3}.\n\n¿Continuar?"
+    ],
+    space_insufficient => [
+        "Espaço insuficiente no destino.\n\nNecessário: {0}\nLivre em {1}: {2}\n\nEscolha outro disco ou liberte espaço.",
+        "Not enough space at the destination.\n\nNeeded: {0}\nFree on {1}: {2}\n\nChoose another disk or free some space.",
+        "Espace insuffisant à destination.\n\nNécessaire : {0}\nLibre sur {1} : {2}\n\nChoisissez un autre disque ou libérez de l'espace.",
+        "Espacio insuficiente en el destino.\n\nNecesario: {0}\nLibre en {1}: {2}\n\nElija otro disco o libere espacio."
+    ],
+    space_unknown => [
+        "Não foi possível calcular o espaço necessário. A cópia vai continuar e pára se o destino encher. Continuar?",
+        "The required space could not be calculated. The copy will proceed and stop if the destination fills up. Continue?",
+        "Impossible de calculer l'espace nécessaire. La copie continuera et s'arrêtera si la destination est pleine. Continuer ?",
+        "No se pudo calcular el espacio necesario. La copia continuará y se detendrá si el destino se llena. ¿Continuar?"
+    ],
+    disks_updated => ["Discos actualizados.", "Disks updated.", "Disques mis à jour.", "Discos actualizados."],
+    mount_lost => ["A unidade {0}: foi desmontada porque o disco foi removido.", "Drive {0}: was unmounted because the disk was removed.", "Le lecteur {0}: a été démonté car le disque a été retiré.", "La unidad {0}: se desmontó porque el disco fue retirado."],
+    mounted_short => ["montado em {0}:", "mounted as {0}:", "monté en {0}:", "montado en {0}:"],
     btn_about => ["Sobre", "About", "À propos", "Acerca de"],
     btn_donate => ["Doar ❤", "Donate ❤", "Faire un don ❤", "Donar ❤"],
     lbl_lang => ["Idioma:", "Language:", "Langue :", "Idioma:"],

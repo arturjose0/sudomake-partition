@@ -57,7 +57,7 @@ seguintes demoram segundos. Só o que mudou é recompilado.
 | `target\release\sudomake-partition.exe` | linha de comando |
 | `target\debug\...` | os mesmos, em modo *debug* (mais lentos, com mais verificações), se compilar sem `--release` |
 | `SudomakePartition.exe` e `sudomake-partition.exe` na raiz | cópias feitas pelo `build.cmd` |
-| `dist\sudomake-partition-setup-1.2.0.exe` | o instalador, depois de correr o Inno Setup (secção 7) |
+| `dist\sudomake-partition-setup-1.3.0.exe` | o instalador, depois de correr o Inno Setup (secção 7) |
 
 A pasta `target\` pode ficar com mais de 1 GB; pode apagá-la sem problema (`cargo clean`),
 tudo é recriado na próxima compilação. `target\`, `dist\`, `*.exe` e `*.zip` estão no
@@ -134,9 +134,15 @@ azulejo seleccionado, borda, texto, barra de espaço. `rgb(r, g, b)`.
 **Tamanho dos azulejos e da janela** → `src/bin/gui.rs`: `TILE_W`, `TILE_H`, `GAP` (azulejos)
 e `.size((1400, 800))` na função `build` (janela inicial).
 
-**Posição dos botões** → `src/bin/gui.rs`, função `layout`. **Desenho dos azulejos** →
-função `paint_tiles`. **O que aparece em cada azulejo** (título, sistema, espaço livre) →
-função `describe_source`.
+**Que botões aparecem em cada situação** → `src/bin/gui.rs`, função `update_toolbar` (a
+barra é contextual: só mostra o que faz sentido para o disco, pasta ou ficheiro seleccionado).
+**Posição dos botões** → função `layout`. **Desenho dos azulejos** (incluindo a etiqueta "Z:"
+das unidades montadas) → função `paint_tiles`. **O que aparece em cada azulejo** (título,
+sistema, espaço livre) → função `describe_source`, que corre numa thread separada
+(`scan_sections`) para a janela nunca bloquear. **Actualização automática** → temporizadores
+`TIMER_PERIODIC` (30 s) e `TIMER_DEVICE` (2,5 s depois de um aviso `WM_DEVICECHANGE`).
+**Cópia de disco completo e verificação de espaço** → função `copy_disk` (usa
+`disk_free_space` e `FileSystem::used`).
 
 **Comandos da linha de comando** → `src/main.rs` (`usage()` é o texto de ajuda; o `match` em
 `main()` liga cada comando à sua função).
@@ -148,8 +154,8 @@ função `detect` (procura `/etc/os-release`, `SystemVersion.plist`, `/home`, `/
 **Ícone** → substitua `installer/sudomake-partition.ico` (deve conter os tamanhos 16, 32, 48
 e 256). O instalador e os atalhos usam-no; o `.exe` em si não tem ícone embutido.
 
-**Versão nova** → mude o número em **dois** sítios: `Cargo.toml` (`version = "1.2.0"`) e
-`installer/sudomake-partition.iss` (`#define AppVersion "1.2.0"`). A interface, a linha de
+**Versão nova** → mude o número em **dois** sítios: `Cargo.toml` (`version = "1.3.0"`) e
+`installer/sudomake-partition.iss` (`#define AppVersion "1.3.0"`). A interface, a linha de
 comando e o instalador lêem daí.
 
 ## 6. Enviar para o GitHub
@@ -223,7 +229,7 @@ cargo +stable-x86_64-pc-windows-gnu build --release
 O resultado é `dist\sudomake-partition-setup-<versão>.exe`. Para testar sem cliques:
 
 ```text
-dist\sudomake-partition-setup-1.2.0.exe /VERYSILENT /CURRENTUSER /NORESTART
+dist\sudomake-partition-setup-1.3.0.exe /VERYSILENT /CURRENTUSER /NORESTART
 ```
 
 instala em `%LOCALAPPDATA%\Programs\SUDOMAKE Partition`; para desinstalar,

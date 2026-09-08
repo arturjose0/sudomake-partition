@@ -51,7 +51,9 @@ LDA) e é gratuito e de código aberto (licença MIT). Se ele o ajudar a recuper
 | **Detecta o sistema** de cada partição: "Ubuntu 22.04.4 LTS", "Kali GNU/Linux Rolling", "macOS 12.5", "Windows (NTFS)", "EFI", "Linux swap", "Backup do Time Machine", "disco de dados"… | ✔ |
 | **Interface gráfica** com os discos em azulejos (como "Este PC"), barra de espaço usado, tema claro/escuro/sistema e 4 idiomas (Português-AO, English, Français, Español) | ✔ |
 | **Copiar** ficheiros ou pastas inteiras com progresso, cancelamento, retomada (o que já existe é saltado), registo de erros e datas preservadas | ✔ |
-| **Montar como unidade** do Windows (`Z:`), somente leitura, via driver Dokan 2 — abre fotos, vídeos, PDFs directamente do disco em qualquer programa | ✔ |
+| **Montar como unidade** do Windows (`Z:`), somente leitura, via driver Dokan 2 — abre fotos, vídeos, PDFs directamente do disco em qualquer programa; **vários discos montados ao mesmo tempo**, cada um com a sua letra | ✔ |
+| **Copiar disco completo** para outro disco, com verificação prévia do espaço livre no destino (recusa se não couber) | ✔ |
+| **Actualização automática**: os discos ligados ou removidos aparecem/desaparecem sozinhos, e o espaço é reavaliado periodicamente | ✔ |
 | **Verificar leitura**: lê tudo sem gravar nada, para saber se o disco está íntegro | ✔ |
 | **Linha de comando** para scripts e cópias grandes (`discos`, `info`, `ls`, `arvore`, `cat`, `copiar`, `verificar`, `montar`) | ✔ |
 | **Instalador** por utilizador ou para todo o sistema, que instala sozinho a única dependência opcional (Dokan); versão portátil em zip | ✔ |
@@ -83,18 +85,24 @@ disco físico). Sem essa permissão só as imagens de disco funcionam.
    como um título ("Disco 1: WD Green 480GB [USB] — Windows + Ubuntu 22.04") e as suas partições
    como azulejos, no estilo de "Este PC" do Windows: ícone da unidade, nome, sistema encontrado,
    barra de espaço usado e sistema de ficheiros. Volumes APFS e volumes lógicos LVM aparecem como
-   azulejos próprios.
-2. **Clique num azulejo** legível (Mac ou Linux): o painel de detalhes mostra o que há nele e
-   surgem dois botões:
-   * **Abrir no programa** — navega pelas pastas (dois cliques para entrar, **▲ Acima** para
-     voltar, dois cliques num ficheiro mostram tamanho, datas e permissões) e copia:
-     **Copiar selecionados…** (Ctrl/Shift para vários), **Copiar pasta atual…** ou
-     **Verificar leitura**. O progresso aparece em baixo; **Cancelar** interrompe. No fim, um
-     resumo mostra os erros, que ficam também em `sudomake-partition-log.txt` no destino.
+   azulejos próprios. Ligue ou retire um disco e o ecrã actualiza-se sozinho.
+2. **Clique num azulejo** legível (Mac ou Linux): a barra de cima passa a mostrar só os botões
+   que fazem sentido para ele:
+   * **Abrir no programa** (ou dois cliques no azulejo) — navega pelas pastas (dois cliques para
+     entrar, **▲ Acima** para voltar, dois cliques num ficheiro mostram tamanho, datas e
+     permissões) e copia: **Copiar selecionados…** (aparece quando há linhas marcadas; Ctrl/Shift
+     para várias), **Copiar pasta atual…** ou **Verificar leitura**. O progresso aparece na barra;
+     **Cancelar** interrompe. No fim, um resumo mostra os erros, que ficam também em
+     `sudomake-partition-log.txt` no destino.
    * **Montar como unidade** — o volume vira uma letra (`Z:`), somente leitura, e o Explorador
-     abre-se nela. Use qualquer programa para abrir os ficheiros. Clique em **Desmontar** antes
-     de retirar o disco; fechar o programa também desmonta. Precisa do driver
+     abre-se nela; o azulejo ganha a etiqueta da letra. Pode montar **vários discos ao mesmo
+     tempo**, cada um com a sua letra. Seleccione o azulejo e clique em **Desmontar Z:** antes
+     de retirar o disco; fechar o programa desmonta todos. Precisa do driver
      [Dokan 2](https://github.com/dokan-dev/dokany/releases) (o instalador trata disso).
+   * **Copiar disco completo…** — copia todo o conteúdo do volume para uma pasta noutro disco.
+     Antes de começar, o programa compara o espaço ocupado com o espaço livre no destino e
+     **recusa a cópia se não couber**, mostrando quanto falta.
+   * **Verificar leitura** — lê o volume inteiro sem gravar nada, para saber se está íntegro.
 3. **Abrir imagem/DMG…** adiciona um ficheiro `.img`, `.raw`, `.dd` ou `.dmg` ao ecrã inicial
    (também pode arrastar a imagem para cima do `SudomakePartition.exe`).
 4. **Idioma** e **Tema** ficam no canto inferior direito. O tema por defeito segue o Windows
@@ -332,9 +340,12 @@ and Spanish, with light/dark/system themes.
 * **Download:** [Releases](https://github.com/arturjose0/sudomake-partition/releases/latest) —
   `sudomake-partition-setup-x.y.z.exe` (installer, auto-installs the optional Dokan driver) or
   the portable `sudomake-partition-windows-x64.zip`.
-* **Use:** run it, accept the Administrator prompt, click a Mac or Linux tile, choose
-  **Open in the program** or **Mount as drive**. User files are in `/Users/<name>` (Mac,
-  "Macintosh HD - Data" volume) or `/home/<name>` (Linux).
+* **Use:** run it, accept the Administrator prompt, click a Mac or Linux tile, then choose
+  **Open in the program**, **Mount as drive** (several disks at once, one letter each),
+  **Copy entire disk** (checks free space at the destination first) or **Verify read**. The
+  toolbar only shows the buttons that apply to what you selected; disks plugged in or removed
+  appear and disappear automatically. User files are in `/Users/<name>` (Mac, "Macintosh HD -
+  Data" volume) or `/home/<name>` (Linux).
 * **Command line:** `sudomake-partition discos | info | ls | arvore | cat | copiar | verificar | montar | desmontar`
   (commands are in Portuguese; `--help` lists them).
 * **Not supported:** FileVault, LUKS, eCryptfs (encrypted), T2/Apple Silicon Macs, XFS/Btrfs

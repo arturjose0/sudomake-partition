@@ -953,6 +953,9 @@ impl FileSystem for Volume {
         }
         Err(err("destino do link simbólico não encontrado"))
     }
+    fn used(&self) -> Option<u64> {
+        Some(self.info.alloc_count * self.c.block_size as u64)
+    }
     fn capacity(&self) -> Option<(u64, u64)> {
         let total = self.c.block_count * self.c.block_size as u64;
         let used_all: u64 = self.c.volumes.iter().map(|v| v.alloc_count).sum::<u64>() * self.c.block_size as u64;

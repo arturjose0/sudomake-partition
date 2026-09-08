@@ -1,6 +1,7 @@
 //! SUDOMAKE Partition — interface gráfica: discos do computador em azulejos com o sistema
-//! detectado, abrir no programa ou montar como unidade, cópia com progresso, temas claro/escuro,
-//! quatro idiomas. Feito em Angola por José Artur Kassala / SUDOMAKE.
+//! detectado, abrir no programa ou montar como unidade (várias ao mesmo tempo), cópia com
+//! progresso, cópia de disco completo com verificação de espaço, actualização automática dos
+//! discos, temas claro/escuro, quatro idiomas. Feito em Angola por José Artur Kassala / SUDOMAKE.
 #![windows_subsystem = "windows"]
 
 use std::cell::{Cell, RefCell};
@@ -31,6 +32,13 @@ use sudomake_partition::util::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// temporizador periódico (procura mudanças nos discos) e temporizador de "debounce" dos
+/// avisos de ligação/remoção de dispositivos
+const TIMER_PERIODIC: usize = 1;
+const TIMER_DEVICE: usize = 2;
+const PERIODIC_MS: u32 = 30_000;
+const DEVICE_DEBOUNCE_MS: u32 = 2_500;
+
 // ------------------------------------------------------------------------------------------
 // configuração (idioma / tema)
 
@@ -57,6 +65,12 @@ impl Theme {
         }
     }
     const ALL: [Theme; 3] = [Theme::System, Theme::Light, Theme::Dark];
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Theme::System
+    }
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -118,13 +132,47 @@ fn open_url(url: &str) {
     }
 }
 
+/// Espaço livre (bytes) na unidade onde fica `path`.
+fn disk_free_space(path: &Path) -> Option<u64> {
+    use winapi::shared::ntdef::ULARGE_INTEGER;
+    use winapi::um::fileapi::GetDiskFreeSpaceExW;
+    let mut s = path.to_string_lossy().to_string();
+    if !s.ends_with('\\') {
+        s.push('\\');
+    }
+    let w = wide(&s);
+    unsafe {
+        let mut free: ULARGE_INTEGER = std::mem::zeroed();
+        let mut total: ULARGE_INTEGER = std::mem::zeroed();
+        let mut total_free: ULARGE_INTEGER = std::mem::zeroed();
+        if GetDiskFreeSpaceExW(w.as_ptr(), &mut free, &mut total, &mut total_free) != 0 {
+            Some(*free.QuadPart())
+        } else {
+            None
+        }
+    }
+}
+
+/// Nome de pasta válido no Windows a partir do título de um volume.
+fn folder_name_from(title: &str) -> String {
+    let mut out: String = title
+        .chars()
+        .map(|c| if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || (c as u32) < 32 { '_' } else { c })
+        .collect();
+    out = out.trim().trim_end_matches('.').to_string();
+    if out.is_empty() {
+        out = "volume".to_string();
+    }
+    out
+}
+
 // ------------------------------------------------------------------------------------------
 // azulejos (painel desenhado à mão)
 
 #[derive(Clone)]
 enum Node {
-    Info { title: String, details: String },
-    Volume { src: Source, title: String, details: String },
+    Info,
+    Volume { src: Source, title: String, used: Option<u64> },
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -134,6 +182,7 @@ enum IconKind {
     Image,
 }
 
+#[derive(Clone)]
 struct Tile {
     title: String,
     line2: String,
@@ -142,9 +191,23 @@ struct Tile {
     icon: IconKind,
     node: Node,
     readable: bool,
+    mounted: Option<char>,
     rect: RECT,
 }
 
+impl Tile {
+    fn new(title: String, line2: String, line3: String, used_frac: Option<f32>, icon: IconKind, node: Node, readable: bool) -> Tile {
+        Tile { title, line2, line3, used_frac, icon, node, readable, mounted: None, rect: RECT { left: 0, top: 0, right: 0, bottom: 0 } }
+    }
+    fn src(&self) -> Option<&Source> {
+        match &self.node {
+            Node::Volume { src, .. } => Some(src),
+            Node::Info => None,
+        }
+    }
+}
+
+#[derive(Clone)]
 struct Section {
     title: String,
     tiles: Vec<Tile>,
@@ -157,13 +220,47 @@ struct TileState {
     content_h: i32,
     dark: bool,
     icons: [HICON; 3],
+    signature: String,
+}
+
+impl Default for TileState {
+    fn default() -> Self {
+        TileState { sections: Vec::new(), selected: None, scroll: 0, content_h: 0, dark: false, icons: [std::ptr::null_mut(); 3], signature: String::new() }
+    }
 }
 
 impl TileState {
-    fn selected_node(&self) -> Option<Node> {
+    fn selected_tile(&self) -> Option<&Tile> {
         let (s, t) = self.selected?;
-        self.sections.get(s)?.tiles.get(t).map(|x| x.node.clone())
+        self.sections.get(s)?.tiles.get(t)
     }
+    fn find(&self, src: &Source) -> Option<(usize, usize)> {
+        for (si, sec) in self.sections.iter().enumerate() {
+            for (ti, t) in sec.tiles.iter().enumerate() {
+                if t.src() == Some(src) {
+                    return Some((si, ti));
+                }
+            }
+        }
+        None
+    }
+}
+
+fn sections_signature(sections: &[Section]) -> String {
+    let mut s = String::new();
+    for sec in sections {
+        s.push_str(&sec.title);
+        s.push('\n');
+        for t in &sec.tiles {
+            s.push_str(&t.title);
+            s.push('|');
+            s.push_str(&t.line2);
+            s.push('|');
+            s.push_str(&t.line3);
+            s.push('\n');
+        }
+    }
+    s
 }
 
 fn rgb(r: u8, g: u8, b: u8) -> u32 {
@@ -182,6 +279,8 @@ struct Palette {
     fill: u32,
     fill_warn: u32,
     header: u32,
+    badge: u32,
+    badge_text: u32,
 }
 
 fn palette(dark: bool) -> Palette {
@@ -198,6 +297,8 @@ fn palette(dark: bool) -> Palette {
             fill: rgb(38, 160, 218),
             fill_warn: rgb(217, 83, 79),
             header: rgb(230, 230, 230),
+            badge: rgb(38, 160, 218),
+            badge_text: rgb(255, 255, 255),
         }
     } else {
         Palette {
@@ -212,6 +313,8 @@ fn palette(dark: bool) -> Palette {
             fill: rgb(38, 160, 218),
             fill_warn: rgb(217, 83, 79),
             header: rgb(40, 40, 40),
+            badge: rgb(0, 120, 212),
+            badge_text: rgb(255, 255, 255),
         }
     }
 }
@@ -237,6 +340,9 @@ unsafe fn make_font(px: i32, bold: bool) -> HFONT {
 }
 
 unsafe fn draw_text(dc: HDC, text: &str, r: &mut RECT, font: HFONT, color: u32, flags: u32) {
+    if text.is_empty() {
+        return;
+    }
     let old = wingdi::SelectObject(dc, font as HGDIOBJ);
     wingdi::SetTextColor(dc, color);
     let w: Vec<u16> = text.encode_utf16().collect();
@@ -313,6 +419,7 @@ unsafe fn paint_tiles(hwnd: HWND, st: &mut TileState) {
     let f_header = make_font(s(19), true);
     let f_title = make_font(s(15), true);
     let f_small = make_font(s(13), false);
+    let f_badge = make_font(s(13), true);
 
     if st.icons[0].is_null() {
         st.icons = [stock_icon(8, s(48)), stock_icon(7, s(48)), stock_icon(8, s(48))];
@@ -354,21 +461,30 @@ unsafe fn paint_tiles(hwnd: HWND, st: &mut TileState) {
                 round_rect(mem, &ir, pal.track, pal.border, s(6));
             }
             let tx = x + s(72);
-            let tw = tile_w - s(84);
+            let mut tw = tile_w - s(84);
+            if let Some(letter) = tile.mounted {
+                // etiqueta "Z:" no canto superior direito
+                let br = RECT { left: r.right - s(48), top: ty + s(9), right: r.right - s(10), bottom: ty + s(29) };
+                round_rect(mem, &br, pal.badge, pal.badge, s(6));
+                let mut btr = br;
+                draw_text(mem, &format!("{}:", letter), &mut btr, f_badge, pal.badge_text, winuser::DT_CENTER | winuser::DT_VCENTER | winuser::DT_SINGLELINE);
+                tw -= s(42);
+            }
             let mut r1 = RECT { left: tx, top: ty + s(10), right: tx + tw, bottom: ty + s(30) };
             draw_text(mem, &tile.title, &mut r1, f_title, if tile.readable { pal.text } else { pal.text2 }, winuser::DT_LEFT | winuser::DT_SINGLELINE | winuser::DT_END_ELLIPSIS);
-            let mut r2 = RECT { left: tx, top: ty + s(32), right: tx + tw, bottom: ty + s(50) };
+            let tw_full = tile_w - s(84);
+            let mut r2 = RECT { left: tx, top: ty + s(32), right: tx + tw_full, bottom: ty + s(50) };
             draw_text(mem, &tile.line2, &mut r2, f_small, pal.text2, winuser::DT_LEFT | winuser::DT_SINGLELINE | winuser::DT_END_ELLIPSIS);
             let mut next_y = ty + s(52);
             if let Some(frac) = tile.used_frac {
-                let bar = RECT { left: tx, top: next_y, right: tx + tw, bottom: next_y + s(12) };
+                let bar = RECT { left: tx, top: next_y, right: tx + tw_full, bottom: next_y + s(12) };
                 fill(mem, &bar, pal.track);
-                let fw = ((tw as f32) * frac.clamp(0.0, 1.0)) as i32;
+                let fw = ((tw_full as f32) * frac.clamp(0.0, 1.0)) as i32;
                 let fr = RECT { left: tx, top: next_y, right: tx + fw, bottom: next_y + s(12) };
                 fill(mem, &fr, if frac > 0.9 { pal.fill_warn } else { pal.fill });
                 next_y += s(15);
             }
-            let mut r3 = RECT { left: tx, top: next_y, right: tx + tw, bottom: next_y + s(18) };
+            let mut r3 = RECT { left: tx, top: next_y, right: tx + tw_full, bottom: next_y + s(18) };
             draw_text(mem, &tile.line3, &mut r3, f_small, pal.text2, winuser::DT_LEFT | winuser::DT_SINGLELINE | winuser::DT_END_ELLIPSIS);
         }
         let rows = ((sec.tiles.len() as i32) + cols - 1) / cols;
@@ -380,7 +496,7 @@ unsafe fn paint_tiles(hwnd: HWND, st: &mut TileState) {
     wingdi::SelectObject(mem, old_bmp);
     wingdi::DeleteObject(bmp as HGDIOBJ);
     wingdi::DeleteDC(mem);
-    for f in [f_header, f_title, f_small] {
+    for f in [f_header, f_title, f_small, f_badge] {
         wingdi::DeleteObject(f as HGDIOBJ);
     }
     winuser::EndPaint(hwnd, &ps);
@@ -396,6 +512,234 @@ fn hit_test(st: &TileState, x: i32, y: i32) -> Option<(usize, usize)> {
         }
     }
     None
+}
+
+// ------------------------------------------------------------------------------------------
+// leitura dos discos (corre numa thread própria; só usa o idioma, não a janela)
+
+struct Child {
+    tile: Tile,
+    /// (nome do sistema, é genérico?) para o resumo do disco
+    os: Option<(String, bool)>,
+    children: Vec<Child>,
+}
+
+fn os_text(lang: Lang, d: &Detected) -> String {
+    let t = |k: &str| tr(lang, k);
+    match d {
+        Detected::Linux(n) => fmt(t("os_linux"), &[n]),
+        Detected::MacOs(n, v) => fmt(t("os_macos"), &[n, v]).trim().to_string(),
+        Detected::MacData(u) => {
+            let base = t("os_mac_data").to_string();
+            if u.is_empty() { base } else { format!("{} ({})", base, u.join(", ")) }
+        }
+        Detected::LinuxHome { users, system } => {
+            let base = if *system { t("os_linux_generic") } else { t("os_linux_home") }.to_string();
+            if users.is_empty() { base } else { format!("{} ({})", base, users.join(", ")) }
+        }
+        Detected::LinuxGeneric => t("os_linux_generic").to_string(),
+        Detected::MacGeneric => t("os_mac_generic").to_string(),
+        Detected::TimeMachine => t("os_timemachine").to_string(),
+        Detected::Data(n) => fmt(t("os_data"), &[&n.to_string()]),
+        Detected::Empty => t("os_empty").to_string(),
+    }
+}
+
+fn fs_name(lang: Lang, fs: &FsKind) -> String {
+    match fs {
+        FsKind::Empty => tr(lang, "part_empty").to_string(),
+        FsKind::Unknown => tr(lang, "fs_unknown").to_string(),
+        FsKind::Hfs => tr(lang, "fs_hfs_classic").to_string(),
+        FsKind::Luks => tr(lang, "fs_luks").to_string(),
+        other => other.name().to_string(),
+    }
+}
+
+fn free_text(lang: Lang, cap: Option<(u64, u64)>, size: u64) -> (String, Option<f32>) {
+    match cap {
+        Some((total, free)) if total > 0 => {
+            let used = total.saturating_sub(free);
+            (fmt(tr(lang, "free_of"), &[&fmt_size(free), &fmt_size(total)]), Some(used as f32 / total as f32))
+        }
+        _ => (fmt_size(size), None),
+    }
+}
+
+fn short_os(d: &Detected) -> Option<(String, bool)> {
+    let generic = !matches!(d, Detected::Linux(_) | Detected::MacOs(..) | Detected::TimeMachine);
+    d.short().map(|s| (s, generic))
+}
+
+/// Descreve as partições/volumes de uma origem.
+fn describe_source(lang: Lang, spec: &str, icon: IconKind) -> Result<Vec<Child>, String> {
+    let t = |k: &str| tr(lang, k);
+    let dev = open::open_source(spec).map_err(|e| e.to_string())?;
+    let layout = partition::scan(&dev).map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    let part_word = t("partition");
+    for p in &layout.parts {
+        let base_name = if p.name.is_empty() { format!("{} {}", part_word, p.index) } else { format!("{} {} \"{}\"", part_word, p.index, p.name) };
+        let base = Source { spec: spec.to_string(), part: Some(p.index), vol: None, force: false };
+        match &p.fs {
+            FsKind::Apfs => {
+                let mut children = Vec::new();
+                let mut first_os = None;
+                match apfs::Container::open(open::partition_device(&dev, p)) {
+                    Ok(c) => {
+                        for v in &c.volumes {
+                            let src = Source { vol: Some(v.index + 1), ..base.clone() };
+                            let mut det_short: Option<(String, bool)> = None;
+                            let mut used = None;
+                            let (os, cap) = if v.encrypted {
+                                (t("encrypted_volume").to_string(), None)
+                            } else {
+                                match open::open(&src, true) {
+                                    Ok(o) => {
+                                        let d = osdetect::detect(o.fs.as_ref());
+                                        det_short = short_os(&d);
+                                        used = o.fs.used();
+                                        (os_text(lang, &d), o.fs.capacity())
+                                    }
+                                    Err(e) => (format!("{}: {}", t("cannot_open"), e), None),
+                                }
+                            };
+                            let title = format!("{} {}: \"{}\"", t("volume"), v.index + 1, v.name);
+                            let (line3, frac) = free_text(lang, cap, p.len);
+                            if !v.encrypted && first_os.is_none() {
+                                first_os = det_short.clone();
+                            }
+                            let node = if v.encrypted { Node::Info } else { Node::Volume { src, title: title.clone(), used } };
+                            children.push(Child {
+                                tile: Tile::new(title, os, format!("APFS · {}", line3), frac, icon, node, !v.encrypted),
+                                os: det_short,
+                                children: Vec::new(),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        let title = format!("{} — {}", base_name, t("cannot_open"));
+                        children.push(Child { tile: Tile::new(title, e.to_string(), fmt_size(p.len), None, icon, Node::Info, false), os: None, children: Vec::new() });
+                    }
+                }
+                let title = format!("{} — {}", base_name, fmt(t("container_apfs"), &[&children.len().to_string()]));
+                out.push(Child { tile: Tile::new(title, "APFS".into(), fmt_size(p.len), None, icon, Node::Info, false), os: first_os, children });
+            }
+            f if f.is_supported() => match open::open(&base, true) {
+                Ok(o) => {
+                    let d = osdetect::detect(o.fs.as_ref());
+                    let os = os_text(lang, &d);
+                    let (line3, frac) = free_text(lang, o.fs.capacity(), p.len);
+                    let node = Node::Volume { src: base, title: base_name.clone(), used: o.fs.used() };
+                    out.push(Child {
+                        tile: Tile::new(base_name, os, format!("{} · {}", o.fs.fs_type(), line3), frac, icon, node, true),
+                        os: short_os(&d),
+                        children: Vec::new(),
+                    });
+                }
+                Err(e) => {
+                    let title = format!("{} — {}", base_name, t("cannot_open"));
+                    out.push(Child { tile: Tile::new(title, e.to_string(), fmt_size(p.len), None, icon, Node::Info, false), os: None, children: Vec::new() });
+                }
+            },
+            _ => {
+                let kind = osdetect::classify_partition(p);
+                let purpose = t(kind.key()).to_string();
+                out.push(Child {
+                    tile: Tile::new(base_name, purpose, format!("{} · {}", fs_name(lang, &p.fs), fmt_size(p.len)), None, icon, Node::Info, false),
+                    os: kind.short().map(|s| (s.to_string(), true)),
+                    children: Vec::new(),
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Resumo dos sistemas encontrados num disco ("Windows + Ubuntu 22.04 LTS"): os nomes
+/// específicos primeiro; "Linux"/"macOS" genéricos só quando não há nome específico.
+fn os_summary(children: &[Child]) -> String {
+    fn walk(list: &[Child], out: &mut Vec<(String, bool)>) {
+        for c in list {
+            if let Some((name, generic)) = &c.os {
+                if !out.iter().any(|(n, _)| n == name) {
+                    out.push((name.clone(), *generic));
+                }
+            }
+            walk(&c.children, out);
+        }
+    }
+    let mut all = Vec::new();
+    walk(children, &mut all);
+    let specific_linux = all.iter().any(|(n, g)| !g && !n.starts_with("macOS") && !n.starts_with("Mac OS") && !n.starts_with("OS X") && n != "Time Machine");
+    let specific_mac = all.iter().any(|(n, g)| !g && (n.starts_with("macOS") || n.starts_with("Mac OS") || n.starts_with("OS X")));
+    let mut names: Vec<String> = Vec::new();
+    for (n, generic) in all {
+        if generic && n == "Linux" && specific_linux {
+            continue;
+        }
+        if generic && n == "macOS" && specific_mac {
+            continue;
+        }
+        if !names.contains(&n) {
+            names.push(n);
+        }
+    }
+    names.truncate(3);
+    names.join(" + ")
+}
+
+fn flatten(children: Vec<Child>, into: &mut Vec<Tile>) {
+    for c in children {
+        if c.children.is_empty() {
+            into.push(c.tile);
+        }
+        flatten(c.children, into);
+    }
+}
+
+fn add_section(lang: Lang, sections: &mut Vec<Section>, title: String, spec: &str, icon: IconKind) {
+    match describe_source(lang, spec, icon) {
+        Ok(children) => {
+            let summary = os_summary(&children);
+            let title = if summary.is_empty() { title } else { format!("{}  —  {}", title, summary) };
+            let mut tiles = Vec::new();
+            flatten(children, &mut tiles);
+            sections.push(Section { title, tiles });
+        }
+        Err(e) => {
+            sections.push(Section { title, tiles: vec![Tile::new(tr(lang, "error").to_string(), e, String::new(), None, icon, Node::Info, false)] });
+        }
+    }
+}
+
+/// Lê todos os discos e imagens e devolve as secções prontas a mostrar.
+fn scan_sections(lang: Lang, images: &[String]) -> Vec<Section> {
+    let t = |k: &str| tr(lang, k);
+    let mut sections = Vec::new();
+    let disks = device::enumerate_disks();
+    if disks.is_empty() && images.is_empty() {
+        sections.push(Section { title: t("no_disks").to_string(), tiles: Vec::new() });
+    }
+    for d in disks {
+        let (model, bus, size) = match &d.info {
+            Some(i) => (i.model.clone(), i.bus.clone(), fmt_size(i.size)),
+            None => ("?".to_string(), "?".to_string(), "?".to_string()),
+        };
+        let removable = bus == "USB" || bus == "SD" || bus == "MMC" || bus == "FireWire";
+        let icon = if removable { IconKind::Removable } else { IconKind::Fixed };
+        let title = format!("{} {}: {} [{}]  {}", t("disk"), d.number, model, bus, size);
+        if !d.readable {
+            let title = format!("{}  —  {}", title, t("no_permission"));
+            sections.push(Section { title, tiles: vec![Tile::new(t("no_permission").to_string(), t("no_permission_long").to_string(), size, None, icon, Node::Info, false)] });
+        } else {
+            add_section(lang, &mut sections, title, &format!("disco:{}", d.number), icon);
+        }
+    }
+    for img in images {
+        let name = Path::new(img).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| img.clone());
+        add_section(lang, &mut sections, format!("{}: {}", t("image"), name), img, IconKind::Image);
+    }
+    sections
 }
 
 // ------------------------------------------------------------------------------------------
@@ -425,11 +769,10 @@ struct Job {
     cancel: Arc<AtomicBool>,
 }
 
-struct Child {
-    tile: Tile,
-    /// (nome do sistema, é genérico?) para o resumo do disco
-    os: Option<(String, bool)>,
-    children: Vec<Child>,
+struct MountEntry {
+    mount: dokan::Mount,
+    svc: Arc<FsService>,
+    src: Source,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -439,23 +782,27 @@ struct LangCell(Option<Lang>);
 struct App {
     window: nwg::Window,
     small_font: nwg::Font,
+    // barra de ferramentas (contextual)
     btn_home: nwg::Button,
     btn_image: nwg::Button,
+    btn_open: nwg::Button,
+    btn_mount: nwg::Button,
+    btn_copy_disk: nwg::Button,
     btn_up: nwg::Button,
     btn_copy_sel: nwg::Button,
     btn_copy_all: nwg::Button,
     btn_verify: nwg::Button,
-    btn_mount: nwg::Button,
     btn_cancel: nwg::Button,
     btn_about: nwg::Button,
     btn_donate: nwg::Button,
+    info: nwg::Label,
+    progress: nwg::ProgressBar,
+    // área principal
     path_box: nwg::TextInput,
     list: nwg::ListView,
     tiles: nwg::Frame,
-    details: nwg::TextBox,
-    btn_open_here: nwg::Button,
-    btn_mount_here: nwg::Button,
-    status: nwg::Label,
+    page: nwg::TextBox,
+    // rodapé: empresa, contactos, idioma e tema
     footer: nwg::Label,
     btn_whatsapp: nwg::Button,
     btn_email: nwg::Button,
@@ -467,33 +814,26 @@ struct App {
     combo_lang: nwg::ComboBox<String>,
     lbl_theme: nwg::Label,
     combo_theme: nwg::ComboBox<String>,
-    progress: nwg::ProgressBar,
     notice: nwg::Notice,
     folder_dialog: nwg::FileDialog,
     image_dialog: nwg::FileDialog,
+    // estado
     tile_state: Rc<RefCell<TileState>>,
     session: RefCell<Option<Session>>,
     job: RefCell<Option<Job>>,
     images: RefCell<Vec<String>>,
     admin: bool,
-    mount: RefCell<Option<(dokan::Mount, Arc<FsService>, Source)>>,
+    mounts: RefCell<Vec<MountEntry>>,
     lang: Cell<LangCell>,
     theme: Cell<Theme>,
     dark: Rc<Cell<bool>>,
     /// 0 = azulejos, 1 = navegação, 2 = página de texto (sobre/doar)
     mode: Cell<u8>,
-}
-
-impl Default for TileState {
-    fn default() -> Self {
-        TileState { sections: Vec::new(), selected: None, scroll: 0, content_h: 0, dark: false, icons: [std::ptr::null_mut(); 3] }
-    }
-}
-
-impl Default for Theme {
-    fn default() -> Self {
-        Theme::System
-    }
+    scan_result: Arc<Mutex<Option<Vec<Section>>>>,
+    scanning: Cell<bool>,
+    scan_pending: Cell<bool>,
+    scan_force: Cell<bool>,
+    copy_sel_visible: Cell<bool>,
 }
 
 fn path_string(stack: &[Entry]) -> String {
@@ -521,284 +861,93 @@ impl App {
         fmt(self.t(key), args)
     }
 
-    fn set_status(&self, text: &str) {
-        self.status.set_text(text);
+    fn set_info(&self, text: &str) {
+        self.info.set_text(text);
     }
 
-    fn os_text(&self, d: &Detected) -> String {
-        match d {
-            Detected::Linux(n) => self.tf("os_linux", &[n]),
-            Detected::MacOs(n, v) => self.tf("os_macos", &[n, v]).trim().to_string(),
-            Detected::MacData(u) => {
-                let base = self.t("os_mac_data").to_string();
-                if u.is_empty() { base } else { format!("{} ({})", base, u.join(", ")) }
-            }
-            Detected::LinuxHome { users, system } => {
-                let base = if *system { self.t("os_linux_generic") } else { self.t("os_linux_home") }.to_string();
-                if users.is_empty() { base } else { format!("{} ({})", base, users.join(", ")) }
-            }
-            Detected::LinuxGeneric => self.t("os_linux_generic").to_string(),
-            Detected::MacGeneric => self.t("os_mac_generic").to_string(),
-            Detected::TimeMachine => self.t("os_timemachine").to_string(),
-            Detected::Data(n) => self.tf("os_data", &[&n.to_string()]),
-            Detected::Empty => self.t("os_empty").to_string(),
+    // ---- discos (leitura em segundo plano) ----------------------------------------------
+
+    /// Pede uma nova leitura dos discos. `force` substitui o ecrã mesmo que nada tenha mudado.
+    fn request_scan(&self, force: bool) {
+        if force {
+            self.scan_force.set(true);
         }
-    }
-
-    fn fs_name(&self, fs: &FsKind) -> String {
-        match fs {
-            FsKind::Empty => self.t("part_empty").to_string(),
-            FsKind::Unknown => self.t("fs_unknown").to_string(),
-            FsKind::Hfs => self.t("fs_hfs_classic").to_string(),
-            FsKind::Luks => self.t("fs_luks").to_string(),
-            other => other.name().to_string(),
-        }
-    }
-
-    fn free_text(&self, cap: Option<(u64, u64)>, size: u64) -> (String, Option<f32>) {
-        match cap {
-            Some((total, free)) if total > 0 => {
-                let used = total.saturating_sub(free);
-                (self.tf("free_of", &[&fmt_size(free), &fmt_size(total)]), Some(used as f32 / total as f32))
-            }
-            _ => (fmt_size(size), None),
-        }
-    }
-
-    /// Descreve as partições/volumes de uma origem.
-    fn describe_source(&self, spec: &str, icon: IconKind) -> Result<Vec<Child>, String> {
-        let dev = open::open_source(spec).map_err(|e| e.to_string())?;
-        let layout = partition::scan(&dev).map_err(|e| e.to_string())?;
-        let mut out = Vec::new();
-        let part_word = self.t("partition");
-        for p in &layout.parts {
-            let base_name = if p.name.is_empty() { format!("{} {}", part_word, p.index) } else { format!("{} {} \"{}\"", part_word, p.index, p.name) };
-            let base = Source { spec: spec.to_string(), part: Some(p.index), vol: None, force: false };
-            let common = format!(
-                "{} {} · {}: {} · {}: {} · {}: {}",
-                part_word,
-                p.index,
-                self.t("type_label"),
-                p.type_name,
-                self.t("size_label"),
-                fmt_size(p.len),
-                self.t("fs_label"),
-                self.fs_name(&p.fs)
-            );
-            match &p.fs {
-                FsKind::Apfs => {
-                    let mut children = Vec::new();
-                    let mut first_os = None;
-                    match apfs::Container::open(open::partition_device(&dev, p)) {
-                        Ok(c) => {
-                            for v in &c.volumes {
-                                let src = Source { vol: Some(v.index + 1), ..base.clone() };
-                                let mut det_short: Option<(String, bool)> = None;
-                                let (os, extra, cap) = if v.encrypted {
-                                    (self.t("encrypted_volume").to_string(), String::new(), None)
-                                } else {
-                                    match open::open(&src, true) {
-                                        Ok(o) => {
-                                            let d = osdetect::detect(o.fs.as_ref());
-                                            det_short = Self::short_os(&d);
-                                            (self.os_text(&d), o.fs.summary(), o.fs.capacity())
-                                        }
-                                        Err(e) => (format!("{}: {}", self.t("cannot_open"), e), String::new(), None),
-                                    }
-                                };
-                                let title = format!("{} {}: \"{}\"", self.t("volume"), v.index + 1, v.name);
-                                let (line3, frac) = self.free_text(cap, p.len);
-                                let details = format!(
-                                    "{}\r\n\r\n{}\r\n{}: {} · {}\r\n{}\r\n{}",
-                                    os,
-                                    title,
-                                    self.t("role_label"),
-                                    v.role_name(),
-                                    self.tf("files_folders", &[&v.num_files.to_string(), &v.num_dirs.to_string()]),
-                                    extra,
-                                    common
-                                );
-                                if !v.encrypted && first_os.is_none() {
-                                    first_os = det_short.clone();
-                                }
-                                let node = if v.encrypted { Node::Info { title: title.clone(), details } } else { Node::Volume { src, title: title.clone(), details } };
-                                children.push(Child {
-                                    tile: Tile { title, line2: os.clone(), line3: format!("APFS · {}", line3), used_frac: frac, icon, node, readable: !v.encrypted, rect: unsafe { std::mem::zeroed() } },
-                                    os: det_short,
-                                    children: Vec::new(),
-                                });
-                            }
-                        }
-                        Err(e) => {
-                            let title = format!("{} — {}", base_name, self.t("cannot_open"));
-                            children.push(Child {
-                                tile: Tile { title: title.clone(), line2: e.to_string(), line3: fmt_size(p.len), used_frac: None, icon, node: Node::Info { title, details: e.to_string() }, readable: false, rect: unsafe { std::mem::zeroed() } },
-                                os: None,
-                                children: Vec::new(),
-                            });
-                        }
-                    }
-                    let title = format!("{} — {}", base_name, self.tf("container_apfs", &[&children.len().to_string()]));
-                    out.push(Child {
-                        tile: Tile { title: title.clone(), line2: "APFS".into(), line3: fmt_size(p.len), used_frac: None, icon, node: Node::Info { title, details: common.clone() }, readable: false, rect: unsafe { std::mem::zeroed() } },
-                        os: first_os,
-                        children,
-                    });
-                }
-                f if f.is_supported() => match open::open(&base, true) {
-                    Ok(o) => {
-                        let d = osdetect::detect(o.fs.as_ref());
-                        let os = self.os_text(&d);
-                        let (line3, frac) = self.free_text(o.fs.capacity(), p.len);
-                        let details = format!("{}\r\n\r\n{}\r\n\r\n{}", os, o.fs.summary(), common);
-                        out.push(Child {
-                            tile: Tile { title: base_name.clone(), line2: os.clone(), line3: format!("{} · {}", o.fs.fs_type(), line3), used_frac: frac, icon, node: Node::Volume { src: base, title: base_name, details }, readable: true, rect: unsafe { std::mem::zeroed() } },
-                            os: Self::short_os(&d),
-                            children: Vec::new(),
-                        });
-                    }
-                    Err(e) => {
-                        let title = format!("{} — {}", base_name, self.t("cannot_open"));
-                        out.push(Child {
-                            tile: Tile { title: title.clone(), line2: e.to_string(), line3: fmt_size(p.len), used_frac: None, icon, node: Node::Info { title, details: format!("{}\r\n\r\n{}", e, common) }, readable: false, rect: unsafe { std::mem::zeroed() } },
-                            os: None,
-                            children: Vec::new(),
-                        });
-                    }
-                },
-                _ => {
-                    let kind = osdetect::classify_partition(p);
-                    let purpose = self.t(kind.key()).to_string();
-                    let extra = match &p.fs {
-                        FsKind::Ntfs | FsKind::Fat | FsKind::ExFat => self.t("windows_reads"),
-                        _ => "",
-                    };
-                    let details = format!("{}\r\n\r\n{} {}\r\n\r\n{}", purpose, self.t("not_readable"), extra, common);
-                    out.push(Child {
-                        tile: Tile { title: base_name.clone(), line2: purpose, line3: format!("{} · {}", self.fs_name(&p.fs), fmt_size(p.len)), used_frac: None, icon, node: Node::Info { title: base_name, details }, readable: false, rect: unsafe { std::mem::zeroed() } },
-                        os: kind.short().map(|s| (s.to_string(), true)),
-                        children: Vec::new(),
-                    });
-                }
-            }
-        }
-        Ok(out)
-    }
-
-    fn short_os(d: &Detected) -> Option<(String, bool)> {
-        let generic = !matches!(d, Detected::Linux(_) | Detected::MacOs(..) | Detected::TimeMachine);
-        d.short().map(|s| (s, generic))
-    }
-
-    /// Resumo dos sistemas encontrados num disco ("Windows + Ubuntu 22.04 LTS"): os nomes
-    /// específicos primeiro; "Linux"/"macOS" genéricos só quando não há nome específico.
-    fn os_summary(children: &[Child]) -> String {
-        fn walk(list: &[Child], out: &mut Vec<(String, bool)>) {
-            for c in list {
-                if let Some((name, generic)) = &c.os {
-                    if !out.iter().any(|(n, _)| n == name) {
-                        out.push((name.clone(), *generic));
-                    }
-                }
-                walk(&c.children, out);
-            }
-        }
-        let mut all = Vec::new();
-        walk(children, &mut all);
-        let specific_linux = all.iter().any(|(n, g)| !g && !n.starts_with("macOS") && !n.starts_with("Mac OS") && !n.starts_with("OS X") && n != "Time Machine");
-        let specific_mac = all.iter().any(|(n, g)| !g && (n.starts_with("macOS") || n.starts_with("Mac OS") || n.starts_with("OS X")));
-        let mut names: Vec<String> = Vec::new();
-        for (n, generic) in all {
-            if generic && n == "Linux" && specific_linux {
-                continue;
-            }
-            if generic && n == "macOS" && specific_mac {
-                continue;
-            }
-            if !names.contains(&n) {
-                names.push(n);
-            }
-        }
-        names.truncate(3);
-        names.join(" + ")
-    }
-
-    fn flatten(children: Vec<Child>, into: &mut Vec<Tile>) {
-        for c in children {
-            let has_children = !c.children.is_empty();
-            if !has_children {
-                into.push(c.tile);
-            }
-            Self::flatten(c.children, into);
-        }
-    }
-
-    fn add_section(&self, sections: &mut Vec<Section>, title: String, spec: &str, icon: IconKind) {
-        match self.describe_source(spec, icon) {
-            Ok(children) => {
-                let summary = Self::os_summary(&children);
-                let title = if summary.is_empty() { title } else { format!("{}  —  {}", title, summary) };
-                let mut tiles = Vec::new();
-                Self::flatten(children, &mut tiles);
-                sections.push(Section { title, tiles });
-            }
-            Err(e) => {
-                sections.push(Section {
-                    title: title.clone(),
-                    tiles: vec![Tile { title: self.t("error").to_string(), line2: e.clone(), line3: String::new(), used_frac: None, icon, node: Node::Info { title, details: e }, readable: false, rect: unsafe { std::mem::zeroed() } }],
-                });
-            }
-        }
-    }
-
-    fn refresh_disks(&self) {
-        if self.job.borrow().is_some() {
+        if self.scanning.get() || self.job.borrow().is_some() {
+            self.scan_pending.set(true);
             return;
         }
-        *self.session.borrow_mut() = None;
-        self.list.clear();
-        self.path_box.set_text("");
-        self.set_status(self.t("searching"));
-        let mut sections = Vec::new();
-        let disks = device::enumerate_disks();
-        if disks.is_empty() {
-            sections.push(Section { title: self.t("no_disks").to_string(), tiles: Vec::new() });
+        self.scanning.set(true);
+        self.scan_pending.set(false);
+        if self.tile_state.borrow().sections.is_empty() {
+            self.set_info(self.t("searching"));
         }
-        for d in disks {
-            let (model, bus, size) = match &d.info {
-                Some(i) => (i.model.clone(), i.bus.clone(), fmt_size(i.size)),
-                None => ("?".to_string(), "?".to_string(), "?".to_string()),
-            };
-            let removable = bus == "USB" || bus == "SD" || bus == "MMC" || bus == "FireWire";
-            let title = format!("{} {}: {} [{}]  {}", self.t("disk"), d.number, model, bus, size);
-            if !d.readable {
-                let t = format!("{}  —  {}", title, self.t("no_permission"));
-                sections.push(Section {
-                    title: t.clone(),
-                    tiles: vec![Tile { title: self.t("no_permission").to_string(), line2: self.t("no_permission_long").to_string(), line3: size.clone(), used_frac: None, icon: if removable { IconKind::Removable } else { IconKind::Fixed }, node: Node::Info { title: t, details: self.t("no_permission_long").to_string() }, readable: false, rect: unsafe { std::mem::zeroed() } }],
-                });
-            } else {
-                self.add_section(&mut sections, title, &format!("disco:{}", d.number), if removable { IconKind::Removable } else { IconKind::Fixed });
+        let lang = self.lang_now();
+        let images = self.images.borrow().clone();
+        let result = self.scan_result.clone();
+        let sender = self.notice.sender();
+        thread::spawn(move || {
+            let sections = catch_unwind(AssertUnwindSafe(|| scan_sections(lang, &images))).unwrap_or_default();
+            if let Ok(mut r) = result.lock() {
+                *r = Some(sections);
+            }
+            sender.notice();
+        });
+    }
+
+    /// Recebe o resultado da leitura (chamado pelo Notice na thread da janela).
+    fn scan_update(&self) {
+        let sections = match self.scan_result.lock().ok().and_then(|mut r| r.take()) {
+            Some(s) => s,
+            None => return,
+        };
+        self.scanning.set(false);
+        let force = self.scan_force.replace(false);
+        let signature = sections_signature(&sections);
+        let changed = force || signature != self.tile_state.borrow().signature;
+        if changed {
+            let mut sections = sections;
+            // etiquetas das unidades montadas
+            for sec in sections.iter_mut() {
+                for t in sec.tiles.iter_mut() {
+                    t.mounted = t.src().and_then(|s| self.mount_letter(s));
+                }
+            }
+            let selected_src = self.tile_state.borrow().selected_tile().and_then(|t| t.src().cloned());
+            {
+                let mut st = self.tile_state.borrow_mut();
+                st.sections = sections;
+                st.signature = signature;
+                st.selected = selected_src.as_ref().and_then(|s| st.find(s));
+                if st.selected.is_none() {
+                    st.scroll = 0;
+                }
+            }
+            self.invalidate_tiles();
+            self.drop_lost_mounts();
+            if self.mode.get() == 0 {
+                self.set_info(if force { self.t("disks_updated") } else { self.t("select_hint") });
+            }
+            self.update_toolbar();
+        } else if self.mode.get() == 0 && force {
+            self.set_info(self.t("disks_updated"));
+        }
+        if self.scan_pending.get() {
+            self.request_scan(false);
+        }
+    }
+
+    /// Desmonta unidades cujo disco já não existe.
+    fn drop_lost_mounts(&self) {
+        let present: Vec<Source> = {
+            let st = self.tile_state.borrow();
+            st.sections.iter().flat_map(|s| s.tiles.iter()).filter_map(|t| t.src().cloned()).collect()
+        };
+        let lost: Vec<Source> = self.mounts.borrow().iter().filter(|m| !present.contains(&m.src)).map(|m| m.src.clone()).collect();
+        for src in lost {
+            if let Some(l) = self.unmount_source(&src) {
+                self.set_info(&self.tf("mount_lost", &[&l.to_string()]));
             }
         }
-        let images = self.images.borrow().clone();
-        for img in images {
-            let name = Path::new(&img).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| img.clone());
-            self.add_section(&mut sections, format!("{}: {}", self.t("image"), name), &img, IconKind::Image);
-        }
-        {
-            let mut st = self.tile_state.borrow_mut();
-            st.sections = sections;
-            st.selected = None;
-            st.scroll = 0;
-        }
-        self.show_mode(0);
-        self.details.set_text(&format!("{}\r\n\r\n{}", self.t("welcome_title"), self.t("welcome_text")));
-        self.btn_open_here.set_enabled(false);
-        self.btn_mount_here.set_enabled(false);
-        self.invalidate_tiles();
-        self.set_status(self.t("select_hint"));
-        self.update_mount_buttons();
     }
 
     fn invalidate_tiles(&self) {
@@ -809,50 +958,80 @@ impl App {
         }
     }
 
-    fn tile_selected(&self) {
-        let node = self.tile_state.borrow().selected_node();
-        match node {
-            Some(Node::Volume { src, title, details }) => {
-                let mounted_here = self.mount.borrow().as_ref().map_or(false, |(_, _, s)| *s == src);
-                let extra = if mounted_here { format!("\r\n\r\n{}", self.t("mounted_here")) } else { String::new() };
-                self.details.set_text(&format!("{}\r\n\r\n{}{}\r\n\r\n{}", title, details, extra, self.t("choose_action")));
-                let free = self.job.borrow().is_none();
-                self.btn_open_here.set_enabled(free);
-                self.btn_mount_here.set_enabled(free);
-                self.set_status(self.t("choose_action"));
-            }
-            Some(Node::Info { title, details }) => {
-                self.details.set_text(&format!("{}\r\n\r\n{}", title, details));
-                self.btn_open_here.set_enabled(false);
-                self.btn_mount_here.set_enabled(false);
-                self.set_status(&title);
-            }
-            None => {}
-        }
-    }
-
-    fn selected_source(&self) -> Option<(Source, String)> {
-        match self.tile_state.borrow().selected_node() {
-            Some(Node::Volume { src, title, .. }) => Some((src, title)),
+    /// Volume seleccionado no ecrã inicial: (origem, título, bytes usados).
+    fn selected_volume(&self) -> Option<(Source, String, Option<u64>)> {
+        let st = self.tile_state.borrow();
+        match st.selected_tile().map(|t| t.node.clone()) {
+            Some(Node::Volume { src, title, used }) => Some((src, title, used)),
             _ => None,
         }
     }
+
+    fn tile_selected(&self) {
+        let title = self.tile_state.borrow().selected_tile().map(|t| format!("{}  —  {}", t.title, t.line2));
+        match title {
+            Some(t) => self.set_info(&t),
+            None => self.set_info(self.t("select_hint")),
+        }
+        self.update_toolbar();
+    }
+
+    // ---- modos ---------------------------------------------------------------------------
 
     /// 0 = azulejos, 1 = navegação, 2 = página de texto
     fn show_mode(&self, mode: u8) {
         self.mode.set(mode);
         self.tiles.set_visible(mode == 0);
-        self.details.set_visible(mode != 1);
-        self.btn_open_here.set_visible(mode == 0);
-        self.btn_mount_here.set_visible(mode == 0);
+        self.page.set_visible(mode == 2);
         self.path_box.set_visible(mode == 1);
         self.list.set_visible(mode == 1);
-        self.layout();
+        if mode == 0 {
+            self.tile_selected();
+        }
+        self.update_toolbar();
     }
 
     fn show_text_page(&self, text: &str) {
         self.show_mode(2);
-        self.details.set_text(text);
+        self.page.set_text(text);
+        self.set_info("");
+    }
+
+    /// Origem a que os botões Montar/Verificar se aplicam no modo actual.
+    fn context_source(&self) -> Option<Source> {
+        match self.mode.get() {
+            0 => self.selected_volume().map(|(s, _, _)| s),
+            1 => self.session.borrow().as_ref().map(|s| s.src.clone()),
+            _ => None,
+        }
+    }
+
+    /// Mostra só os botões que fazem sentido no contexto actual e reposiciona tudo.
+    fn update_toolbar(&self) {
+        let job = self.job.borrow().is_some();
+        let mode = self.mode.get();
+        let sel = mode == 0 && self.selected_volume().is_some();
+        let ctx = self.context_source();
+        let mounted = ctx.as_ref().and_then(|s| self.mount_letter(s));
+        self.btn_mount.set_text(&match mounted {
+            Some(l) => self.tf("btn_unmount", &[&l.to_string()]),
+            None => self.t("btn_mount").to_string(),
+        });
+        let copy_sel = !job && mode == 1 && self.list.selected_count() > 0;
+        self.copy_sel_visible.set(copy_sel);
+        self.btn_home.set_visible(!job);
+        self.btn_image.set_visible(!job && mode == 0);
+        self.btn_open.set_visible(!job && sel);
+        self.btn_mount.set_visible(!job && ctx.is_some());
+        self.btn_copy_disk.set_visible(!job && sel);
+        self.btn_up.set_visible(!job && mode == 1);
+        self.btn_copy_sel.set_visible(copy_sel);
+        self.btn_copy_all.set_visible(!job && mode == 1);
+        self.btn_verify.set_visible(!job && (sel || mode == 1));
+        self.btn_cancel.set_visible(job);
+        self.progress.set_visible(job);
+        self.progress.set_marquee(job, 30);
+        self.layout();
     }
 
     fn open_image(&self) {
@@ -867,13 +1046,13 @@ impl App {
                     imgs.push(p);
                 }
                 drop(imgs);
-                self.refresh_disks();
+                self.request_scan(true);
             }
         }
     }
 
     fn open_selected(&self) {
-        if let Some((src, label)) = self.selected_source() {
+        if let Some((src, label, _)) = self.selected_volume() {
             self.open_volume(src, label);
         }
     }
@@ -888,22 +1067,21 @@ impl App {
             self.list_current();
             return;
         }
-        self.set_status(&self.tf("opening", &[&label]));
+        self.set_info(&self.tf("opening", &[&label]));
         match open::open(&src, true) {
             Ok(o) => match o.fs.root() {
                 Ok(root) => {
                     *self.session.borrow_mut() = Some(Session { src, fs: o.fs, stack: vec![root], entries: Vec::new() });
                     self.show_mode(1);
                     self.list_current();
-                    self.update_mount_buttons();
                 }
                 Err(e) => {
-                    self.set_status(self.t("err_root"));
+                    self.set_info(self.t("err_root"));
                     nwg::modal_error_message(&self.window, self.t("error"), &e.to_string());
                 }
             },
             Err(e) => {
-                self.set_status(self.t("err_open_volume"));
+                self.set_info(self.t("err_open_volume"));
                 nwg::modal_error_message(&self.window, self.t("err_open_volume"), &e.to_string());
             }
         }
@@ -945,11 +1123,13 @@ impl App {
             let cols = [e.name.as_str(), size.as_str(), date.as_str(), kind.as_str()];
             self.list.insert_items_row(Some(i as i32), &cols);
         }
-        self.path_box.set_text(&path_string(&sess.stack));
+        let path = path_string(&sess.stack);
         sess.entries = entries;
         let summary = sess.fs.summary();
         drop(guard);
-        self.set_status(&format!("{}  —  {}", self.tf("folder_stats", &[&nd.to_string(), &nf.to_string(), &fmt_size(total)]), summary));
+        self.path_box.set_text(&format!("{}      ·      {}", path, self.tf("folder_stats", &[&nd.to_string(), &nf.to_string(), &fmt_size(total)])));
+        self.set_info(&summary);
+        self.update_toolbar();
     }
 
     fn activate_row(&self, row: usize) {
@@ -1061,7 +1241,61 @@ impl App {
         }
     }
 
+    /// Copia todo o conteúdo do volume seleccionado para outro disco, depois de confirmar
+    /// que há espaço suficiente no destino.
+    fn copy_disk(&self) {
+        let (src, title, mut used) = match self.selected_volume() {
+            Some(v) => v,
+            None => return,
+        };
+        if self.job.borrow().is_some() {
+            return;
+        }
+        if used.is_none() {
+            if let Ok(o) = open::open(&src, true) {
+                used = o.fs.used();
+            }
+        }
+        let dest = match self.choose_folder() {
+            Some(d) => d,
+            None => return,
+        };
+        let free = disk_free_space(&dest);
+        let dest_disp = dest.to_string_lossy().to_string();
+        match (used, free) {
+            (Some(need), Some(free)) if free < need => {
+                nwg::modal_error_message(&self.window, self.t("copy_disk_title"), &self.tf("space_insufficient", &[&fmt_size(need), &dest_disp, &fmt_size(free)]));
+                return;
+            }
+            (Some(need), Some(free)) => {
+                let p = nwg::MessageParams {
+                    title: self.t("copy_disk_title"),
+                    content: &self.tf("copy_disk_confirm", &[&title, &fmt_size(need), &dest_disp, &fmt_size(free)]),
+                    buttons: nwg::MessageButtons::YesNo,
+                    icons: nwg::MessageIcons::Question,
+                };
+                if nwg::modal_message(&self.window, &p) != nwg::MessageChoice::Yes {
+                    return;
+                }
+            }
+            _ => {
+                let p = nwg::MessageParams { title: self.t("copy_disk_title"), content: self.t("space_unknown"), buttons: nwg::MessageButtons::YesNo, icons: nwg::MessageIcons::Warning };
+                if nwg::modal_message(&self.window, &p) != nwg::MessageChoice::Yes {
+                    return;
+                }
+            }
+        }
+        let target = dest.join(folder_name_from(&title));
+        self.start_job(src, "/".to_string(), None, Some(target));
+    }
+
     fn verify(&self) {
+        if self.mode.get() == 0 {
+            if let Some((src, _, _)) = self.selected_volume() {
+                self.start_job(src, "/".to_string(), None, None);
+            }
+            return;
+        }
         let (src, path) = match self.need_session("verify_title") {
             Some(v) => v,
             None => return,
@@ -1069,49 +1303,58 @@ impl App {
         self.start_job(src, path, None, None);
     }
 
-    fn update_mount_buttons(&self) {
-        let mounted = self.mount.borrow().as_ref().map(|(m, _, _)| m.letter);
-        let text = match mounted {
-            Some(l) => self.tf("btn_unmount", &[&l.to_string()]),
-            None => self.t("btn_mount").to_string(),
-        };
-        self.btn_mount.set_text(&text);
-        self.btn_mount_here.set_text(&text);
+    // ---- montagem (várias unidades ao mesmo tempo) ----------------------------------------
+
+    fn mount_letter(&self, src: &Source) -> Option<char> {
+        self.mounts.borrow().iter().find(|m| m.src == *src).map(|m| m.mount.letter)
     }
 
-    fn unmount_current(&self) -> Option<char> {
-        let current = self.mount.borrow_mut().take();
-        if let Some((m, svc, _)) = current {
-            let letter = m.letter;
-            m.unmount();
-            svc.stop();
-            self.update_mount_buttons();
-            return Some(letter);
+    fn unmount_source(&self, src: &Source) -> Option<char> {
+        let pos = self.mounts.borrow().iter().position(|m| m.src == *src)?;
+        let entry = self.mounts.borrow_mut().remove(pos);
+        let letter = entry.mount.letter;
+        entry.mount.unmount();
+        entry.svc.stop();
+        self.set_tile_mounted(src, None);
+        Some(letter)
+    }
+
+    fn unmount_all(&self) {
+        let all: Vec<MountEntry> = self.mounts.borrow_mut().drain(..).collect();
+        for m in all {
+            m.mount.unmount();
+            m.svc.stop();
         }
-        None
     }
 
-    fn toggle_mount(&self, from_tiles: bool) {
+    fn set_tile_mounted(&self, src: &Source, letter: Option<char>) {
+        let mut st = self.tile_state.borrow_mut();
+        if let Some((si, ti)) = st.find(src) {
+            st.sections[si].tiles[ti].mounted = letter;
+        }
+        drop(st);
+        self.invalidate_tiles();
+    }
+
+    fn toggle_mount(&self) {
         if self.job.borrow().is_some() {
             return;
         }
-        if self.mount.borrow().is_some() {
-            if let Some(l) = self.unmount_current() {
-                self.set_status(&self.tf("unmounted_status", &[&l.to_string()]));
-            }
-            return;
-        }
-        let src = if from_tiles {
-            self.selected_source().map(|(s, _)| s)
-        } else {
-            self.current_source().filter(|_| self.mode.get() == 1).map(|(s, _)| s).or_else(|| self.selected_source().map(|(s, _)| s))
-        };
-        match src {
-            Some(s) => self.mount_source(s),
+        let src = match self.context_source() {
+            Some(s) => s,
             None => {
                 nwg::modal_info_message(&self.window, self.t("mount_title"), self.t("select_to_mount"));
+                return;
             }
+        };
+        if self.mount_letter(&src).is_some() {
+            if let Some(l) = self.unmount_source(&src) {
+                self.set_info(&self.tf("unmounted_status", &[&l.to_string()]));
+            }
+        } else {
+            self.mount_source(src);
         }
+        self.update_toolbar();
     }
 
     fn mount_source(&self, src: Source) {
@@ -1126,7 +1369,7 @@ impl App {
                 return;
             }
         };
-        self.set_status(&self.tf("mounting", &[&letter.to_string()]));
+        self.set_info(&self.tf("mounting", &[&letter.to_string()]));
         let svc = match FsService::start(src.clone(), 0) {
             Ok(s) => Arc::new(s),
             Err(e) => {
@@ -1136,18 +1379,20 @@ impl App {
         };
         match dokan::mount(svc.clone(), letter, self.admin) {
             Ok(m) => {
-                *self.mount.borrow_mut() = Some((m, svc, src));
-                self.update_mount_buttons();
-                self.set_status(&self.tf("mounted_status", &[&letter.to_string()]));
+                self.mounts.borrow_mut().push(MountEntry { mount: m, svc, src: src.clone() });
+                self.set_tile_mounted(&src, Some(letter));
+                self.set_info(&self.tf("mounted_status", &[&letter.to_string()]));
                 let _ = std::process::Command::new("explorer.exe").arg(format!("{}:\\", letter)).spawn();
             }
             Err(e) => {
                 svc.stop();
-                self.set_status(self.t("mount_failed"));
+                self.set_info(self.t("mount_failed"));
                 nwg::modal_error_message(&self.window, self.t("mount_failed_title"), &e);
             }
         }
     }
+
+    // ---- páginas de texto ------------------------------------------------------------------
 
     fn about(&self) {
         let text = self.tf(
@@ -1162,10 +1407,14 @@ impl App {
         self.show_text_page(&format!("{}\r\n\r\n{}", self.t("donate_title"), text));
     }
 
+    // ---- textos, tema e disposição ------------------------------------------------------
+
     fn apply_texts(&self) {
         self.window.set_text(&format!("{} {} · {}", i18n::APP_NAME, VERSION, self.t("made_in_angola")));
         self.btn_home.set_text(self.t("btn_home"));
         self.btn_image.set_text(self.t("btn_image"));
+        self.btn_open.set_text(self.t("btn_open_here"));
+        self.btn_copy_disk.set_text(self.t("btn_copy_disk"));
         self.btn_up.set_text(self.t("btn_up"));
         self.btn_copy_sel.set_text(self.t("btn_copy_sel"));
         self.btn_copy_all.set_text(self.t("btn_copy_all"));
@@ -1173,8 +1422,6 @@ impl App {
         self.btn_cancel.set_text(self.t("btn_cancel"));
         self.btn_about.set_text(self.t("btn_about"));
         self.btn_donate.set_text(self.t("btn_donate"));
-        self.btn_open_here.set_text(self.t("btn_open_here"));
-        self.update_mount_buttons();
         self.btn_whatsapp.set_text(self.t("btn_whatsapp"));
         self.btn_email.set_text(self.t("btn_email"));
         self.btn_site.set_text(self.t("btn_site"));
@@ -1191,7 +1438,7 @@ impl App {
         for (i, key) in ["col_name", "col_size", "col_modified", "col_type"].iter().enumerate() {
             self.list.update_column(i, nwg::InsertListViewColumn { index: Some(i as i32), fmt: None, width: None, text: Some(self.t(key).to_string()) });
         }
-        self.layout();
+        self.update_toolbar();
     }
 
     fn is_dark(&self) -> bool {
@@ -1218,19 +1465,19 @@ impl App {
             let handles = [
                 self.list.handle.hwnd(),
                 self.path_box.handle.hwnd(),
-                self.details.handle.hwnd(),
+                self.page.handle.hwnd(),
                 self.btn_home.handle.hwnd(),
                 self.btn_image.handle.hwnd(),
+                self.btn_open.handle.hwnd(),
+                self.btn_mount.handle.hwnd(),
+                self.btn_copy_disk.handle.hwnd(),
                 self.btn_up.handle.hwnd(),
                 self.btn_copy_sel.handle.hwnd(),
                 self.btn_copy_all.handle.hwnd(),
                 self.btn_verify.handle.hwnd(),
-                self.btn_mount.handle.hwnd(),
                 self.btn_cancel.handle.hwnd(),
                 self.btn_about.handle.hwnd(),
                 self.btn_donate.handle.hwnd(),
-                self.btn_open_here.handle.hwnd(),
-                self.btn_mount_here.handle.hwnd(),
                 self.btn_whatsapp.handle.hwnd(),
                 self.btn_email.handle.hwnd(),
                 self.btn_site.handle.hwnd(),
@@ -1264,6 +1511,9 @@ impl App {
             None => return min,
         };
         let text = b.text();
+        if text.is_empty() {
+            return min;
+        }
         let w: Vec<u16> = text.encode_utf16().collect();
         unsafe {
             let dc = winuser::GetDC(hwnd);
@@ -1282,43 +1532,55 @@ impl App {
         let (w, h) = (w as i32, h as i32);
         let top = 8;
         let bh = 30;
+        // botões da esquerda (só os visíveis)
         let mut x = 8;
-        let buttons: [&nwg::Button; 10] = [
+        let left: [&nwg::Button; 10] = [
             &self.btn_home,
             &self.btn_image,
+            &self.btn_open,
+            &self.btn_mount,
+            &self.btn_copy_disk,
             &self.btn_up,
             &self.btn_copy_sel,
             &self.btn_copy_all,
             &self.btn_verify,
-            &self.btn_mount,
             &self.btn_cancel,
-            &self.btn_about,
-            &self.btn_donate,
         ];
-        for b in buttons {
+        for b in left {
+            if !b.visible() {
+                continue;
+            }
             let bw = Self::text_width(b, 70);
             b.set_position(x, top);
             b.set_size(bw as u32, bh as u32);
             x += bw + 6;
         }
+        // botões da direita
+        let mut rx = w - 8;
+        for b in [&self.btn_donate, &self.btn_about] {
+            let bw = Self::text_width(b, 70);
+            rx -= bw;
+            b.set_position(rx, top);
+            b.set_size(bw as u32, bh as u32);
+            rx -= 6;
+        }
+        // informação e progresso entre os dois grupos
+        if self.progress.visible() {
+            rx -= 200;
+            self.progress.set_position(rx, top + 5);
+            self.progress.set_size(190, 20);
+            rx -= 6;
+        }
+        self.info.set_position(x + 8, top + 6);
+        self.info.set_size((rx - x - 16).max(40) as u32, 20);
+
         let y2 = top + bh + 10;
-        let bottom_h = 86;
-        let main_h = (h - y2 - bottom_h - 8).max(120);
+        let bottom_h = 62;
+        let main_h = (h - y2 - bottom_h - 6).max(120);
         match self.mode.get() {
             0 => {
-                let details_h = 118;
-                let tiles_h = (main_h - details_h - 10).max(80);
                 self.tiles.set_position(8, y2);
-                self.tiles.set_size((w - 16).max(100) as u32, tiles_h as u32);
-                let dy = y2 + tiles_h + 10;
-                let btn_w = 250;
-                let details_w = (w - 16 - 2 * btn_w - 24).max(120);
-                self.details.set_position(8, dy);
-                self.details.set_size(details_w as u32, details_h as u32);
-                self.btn_open_here.set_position(8 + details_w + 12, dy + 20);
-                self.btn_open_here.set_size(btn_w as u32, 46);
-                self.btn_mount_here.set_position(8 + details_w + 12 + btn_w + 12, dy + 20);
-                self.btn_mount_here.set_size(btn_w as u32, 46);
+                self.tiles.set_size((w - 16).max(100) as u32, main_h as u32);
             }
             1 => {
                 self.path_box.set_position(8, y2);
@@ -1327,19 +1589,13 @@ impl App {
                 self.list.set_size((w - 16).max(100) as u32, (main_h - 34).max(60) as u32);
             }
             _ => {
-                self.details.set_position(8, y2);
-                self.details.set_size((w - 16).max(100) as u32, main_h as u32);
+                self.page.set_position(8, y2);
+                self.page.set_size((w - 16).max(100) as u32, main_h as u32);
             }
         }
-        let yb = h - bottom_h;
-        self.status.set_position(8, yb + 2);
-        self.status.set_size((w - 252).max(100) as u32, 22);
-        self.progress.set_position(w - 236, yb + 3);
-        self.progress.set_size(228, 20);
-        self.footer.set_position(8, yb + 30);
-        self.footer.set_size((w - 16).max(100) as u32, 20);
+        // rodapé: contactos + idioma/tema, e a linha da empresa
+        let ly = h - bottom_h + 4;
         let mut lx = 8;
-        let ly = yb + 54;
         for b in [&self.btn_whatsapp, &self.btn_email, &self.btn_site, &self.btn_youtube, &self.btn_github, &self.btn_paypal] {
             let bw = Self::text_width(b, 70);
             b.set_position(lx, ly);
@@ -1356,20 +1612,11 @@ impl App {
         self.combo_lang.set_size(170, 26);
         self.lbl_lang.set_position(lx2 - 66, ly + 4);
         self.lbl_lang.set_size(62, 22);
+        self.footer.set_position(8, h - 24);
+        self.footer.set_size((w - 16).max(100) as u32, 20);
     }
 
-    fn set_busy(&self, busy: bool) {
-        for b in [&self.btn_home, &self.btn_image, &self.btn_up, &self.btn_copy_sel, &self.btn_copy_all, &self.btn_verify, &self.btn_mount, &self.btn_open_here, &self.btn_mount_here] {
-            b.set_enabled(!busy);
-        }
-        self.btn_cancel.set_enabled(busy);
-        self.progress.set_visible(busy);
-        self.progress.set_marquee(busy, 30);
-        if !busy && self.selected_source().is_none() {
-            self.btn_open_here.set_enabled(false);
-            self.btn_mount_here.set_enabled(false);
-        }
-    }
+    // ---- trabalhos de cópia / verificação ---------------------------------------------------
 
     fn start_job(&self, src: Source, dir_path: String, names: Option<Vec<String>>, dest: Option<PathBuf>) {
         if self.job.borrow().is_some() {
@@ -1394,14 +1641,14 @@ impl App {
             sender.notice();
         });
         *self.job.borrow_mut() = Some(Job { progress, cancel });
-        self.set_busy(true);
-        self.set_status(self.t(if is_copy { "copying" } else { "verifying" }));
+        self.set_info(self.t(if is_copy { "copying" } else { "verifying" }));
+        self.update_toolbar();
     }
 
     fn cancel_job(&self) {
         if let Some(j) = self.job.borrow().as_ref() {
             j.cancel.store(true, Ordering::Relaxed);
-            self.set_status(self.t("cancelling"));
+            self.set_info(self.t("cancelling"));
         }
     }
 
@@ -1417,18 +1664,18 @@ impl App {
         };
         let (files, bytes, current, done, summary, errors, log_path, failed) = snapshot;
         if !done {
-            self.set_status(&self.tf("progress", &[&files.to_string(), &fmt_size(bytes), &current]));
+            self.set_info(&self.tf("progress", &[&files.to_string(), &fmt_size(bytes), &current]));
             return;
         }
         *self.job.borrow_mut() = None;
-        self.set_busy(false);
+        self.update_toolbar();
         match failed {
             Some(f) => {
-                self.set_status(self.t("failed"));
+                self.set_info(self.t("failed"));
                 nwg::modal_error_message(&self.window, self.t("failure"), &f);
             }
             None => {
-                self.set_status(&summary);
+                self.set_info(&summary);
                 let mut text = summary;
                 if !errors.is_empty() {
                     text.push_str(self.t("first_errors"));
@@ -1444,6 +1691,9 @@ impl App {
                     nwg::modal_info_message(&self.window, self.t("done"), &text);
                 }
             }
+        }
+        if self.scan_pending.get() {
+            self.request_scan(false);
         }
     }
 }
@@ -1557,22 +1807,25 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
     for b in [
         &mut app.btn_home,
         &mut app.btn_image,
+        &mut app.btn_open,
+        &mut app.btn_mount,
+        &mut app.btn_copy_disk,
         &mut app.btn_up,
         &mut app.btn_copy_sel,
         &mut app.btn_copy_all,
         &mut app.btn_verify,
-        &mut app.btn_mount,
+        &mut app.btn_cancel,
         &mut app.btn_about,
         &mut app.btn_donate,
-        &mut app.btn_open_here,
-        &mut app.btn_mount_here,
     ] {
         nwg::Button::builder().text("").parent(&app.window).build(b)?;
     }
-    nwg::Button::builder().text("").parent(&app.window).enabled(false).build(&mut app.btn_cancel)?;
     for b in [&mut app.btn_whatsapp, &mut app.btn_email, &mut app.btn_site, &mut app.btn_youtube, &mut app.btn_github, &mut app.btn_paypal] {
         nwg::Button::builder().text("").parent(&app.window).font(Some(&app.small_font)).build(b)?;
     }
+    nwg::Label::builder().parent(&app.window).text("").font(Some(&app.small_font)).build(&mut app.info)?;
+    nwg::ProgressBar::builder().parent(&app.window).flags(nwg::ProgressBarFlags::VISIBLE | nwg::ProgressBarFlags::MARQUEE).build(&mut app.progress)?;
+    app.progress.set_visible(false);
 
     nwg::TextInput::builder().parent(&app.window).readonly(true).text("").build(&mut app.path_box)?;
     nwg::ListView::builder()
@@ -1595,9 +1848,8 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
         .text("")
         .readonly(true)
         .flags(nwg::TextBoxFlags::VISIBLE | nwg::TextBoxFlags::VSCROLL | nwg::TextBoxFlags::AUTOVSCROLL | nwg::TextBoxFlags::TAB_STOP)
-        .build(&mut app.details)?;
+        .build(&mut app.page)?;
 
-    nwg::Label::builder().parent(&app.window).text("").build(&mut app.status)?;
     nwg::Label::builder().parent(&app.window).text("").font(Some(&app.small_font)).build(&mut app.footer)?;
     nwg::Label::builder().parent(&app.window).text("").font(Some(&app.small_font)).build(&mut app.lbl_lang)?;
     nwg::Label::builder().parent(&app.window).text("").font(Some(&app.small_font)).build(&mut app.lbl_theme)?;
@@ -1605,22 +1857,17 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
     let lang_idx = Lang::ALL.iter().position(|l| *l == lang);
     nwg::ComboBox::builder().parent(&app.window).collection(langs).selected_index(lang_idx).font(Some(&app.small_font)).build(&mut app.combo_lang)?;
     nwg::ComboBox::builder().parent(&app.window).collection(vec![String::new(), String::new(), String::new()]).selected_index(Some(0)).font(Some(&app.small_font)).build(&mut app.combo_theme)?;
-    nwg::ProgressBar::builder()
-        .parent(&app.window)
-        .flags(nwg::ProgressBarFlags::VISIBLE | nwg::ProgressBarFlags::MARQUEE)
-        .build(&mut app.progress)?;
-    app.progress.set_visible(false);
     nwg::Notice::builder().parent(&app.window).build(&mut app.notice)?;
     nwg::FileDialog::builder().title(tr(lang, "folder_dialog")).action(nwg::FileDialogAction::OpenDirectory).build(&mut app.folder_dialog)?;
     nwg::FileDialog::builder().title(tr(lang, "image_dialog")).action(nwg::FileDialogAction::Open).filters(tr(lang, "image_filter")).build(&mut app.image_dialog)?;
 
     let app = Rc::new(app);
     app.apply_texts();
+    app.show_mode(0);
 
     // painel de azulejos: pintura e rato
     let st = app.tile_state.clone();
     let a_tiles = app.clone();
-    let tiles_hwnd = app.tiles.handle.hwnd().expect("frame");
     let _tiles_handler = nwg::bind_raw_event_handler(&app.tiles.handle, 0x10010, move |hwnd, msg, w, l| {
         match msg {
             winuser::WM_PAINT => {
@@ -1658,22 +1905,40 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
             _ => None,
         }
     });
-    let _ = tiles_hwnd;
 
-    // fundo e cores do tema escuro
+    // janela: fundo do tema, temporizadores e avisos de dispositivos ligados/removidos
     let dark_flag = app.dark.clone();
-    let brush_bg: HBRUSH = unsafe { wingdi::CreateSolidBrush(rgb(32, 32, 32)) };
-    let brush_edit: HBRUSH = unsafe { wingdi::CreateSolidBrush(rgb(43, 43, 43)) };
+    let a_win = app.clone();
+    let brush_dark: HBRUSH = unsafe { wingdi::CreateSolidBrush(rgb(32, 32, 32)) };
+    let brush_dark_edit: HBRUSH = unsafe { wingdi::CreateSolidBrush(rgb(43, 43, 43)) };
+    let brush_light: HBRUSH = unsafe { wingdi::CreateSolidBrush(rgb(255, 255, 255)) };
     let _win_handler = nwg::bind_raw_event_handler(&app.window.handle, 0x10020, move |hwnd, msg, w, l| {
-        if !dark_flag.get() {
-            return None;
+        match msg {
+            winuser::WM_TIMER => {
+                if w == TIMER_DEVICE {
+                    unsafe { winuser::KillTimer(hwnd, TIMER_DEVICE) };
+                    a_win.request_scan(false);
+                } else if w == TIMER_PERIODIC && a_win.mode.get() == 0 {
+                    a_win.request_scan(false);
+                }
+                return Some(0);
+            }
+            winuser::WM_DEVICECHANGE => {
+                // 0x8000 chegada, 0x8004 remoção, 0x0007 nós de dispositivos alterados
+                if w == 0x8000 || w == 0x8004 || w == 0x0007 {
+                    unsafe { winuser::SetTimer(hwnd, TIMER_DEVICE, DEVICE_DEBOUNCE_MS, None) };
+                }
+                return None;
+            }
+            _ => {}
         }
+        let dark = dark_flag.get();
         match msg {
             winuser::WM_ERASEBKGND => {
                 let mut r: RECT = unsafe { std::mem::zeroed() };
                 unsafe {
                     winuser::GetClientRect(hwnd, &mut r);
-                    winuser::FillRect(w as HDC, &r, brush_bg);
+                    winuser::FillRect(w as HDC, &r, if dark { brush_dark } else { brush_light });
                 }
                 Some(1)
             }
@@ -1685,10 +1950,15 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
                     String::from_utf16_lossy(&cls[..n.max(0) as usize]).eq_ignore_ascii_case("Edit")
                 };
                 unsafe {
-                    wingdi::SetTextColor(dc, rgb(240, 240, 240));
-                    wingdi::SetBkColor(dc, if is_edit { rgb(43, 43, 43) } else { rgb(32, 32, 32) });
+                    if dark {
+                        wingdi::SetTextColor(dc, rgb(240, 240, 240));
+                        wingdi::SetBkColor(dc, if is_edit { rgb(43, 43, 43) } else { rgb(32, 32, 32) });
+                    } else {
+                        wingdi::SetTextColor(dc, rgb(26, 26, 26));
+                        wingdi::SetBkColor(dc, rgb(255, 255, 255));
+                    }
                 }
-                Some((if is_edit { brush_edit } else { brush_bg }) as LRESULT)
+                Some((if dark { if is_edit { brush_dark_edit } else { brush_dark } } else { brush_light }) as LRESULT)
             }
             _ => None,
         }
@@ -1696,16 +1966,16 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
 
     // etiquetas: a área não-cliente (centragem vertical do nwg) pintada com a cor do tema
     let mut label_handlers = Vec::new();
-    for (i, lbl) in [&app.status, &app.footer, &app.lbl_lang, &app.lbl_theme].into_iter().enumerate() {
+    for (i, lbl) in [&app.info, &app.footer, &app.lbl_lang, &app.lbl_theme].into_iter().enumerate() {
         let dark_flag = app.dark.clone();
         if let Ok(h) = nwg::bind_raw_event_handler(&lbl.handle, 0x10030 + i, move |hwnd, msg, _w, _l| {
-            if msg == winuser::WM_NCPAINT && dark_flag.get() {
+            if msg == winuser::WM_NCPAINT {
                 unsafe {
                     let dc = winuser::GetWindowDC(hwnd);
                     let mut r: RECT = std::mem::zeroed();
                     winuser::GetWindowRect(hwnd, &mut r);
                     let r = RECT { left: 0, top: 0, right: r.right - r.left, bottom: r.bottom - r.top };
-                    winuser::FillRect(dc, &r, brush_bg);
+                    winuser::FillRect(dc, &r, if dark_flag.get() { brush_dark } else { brush_light });
                     winuser::ReleaseDC(hwnd, dc);
                 }
                 return Some(0);
@@ -1734,23 +2004,25 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
                         }
                         a.cancel_job();
                     }
-                    a.unmount_current();
+                    a.unmount_all();
                     nwg::stop_thread_dispatch();
                 }
             }
             E::OnButtonClick => {
                 if handle == a.btn_home.handle {
-                    if a.mode.get() == 1 || a.mode.get() == 2 {
-                        a.show_mode(0);
-                        a.tile_selected();
-                        if a.selected_source().is_none() {
-                            a.details.set_text(&format!("{}\r\n\r\n{}", a.t("welcome_title"), a.t("welcome_text")));
-                        }
+                    if a.mode.get() == 0 {
+                        a.request_scan(true);
                     } else {
-                        a.refresh_disks();
+                        a.show_mode(0);
                     }
                 } else if handle == a.btn_image.handle {
                     a.open_image();
+                } else if handle == a.btn_open.handle {
+                    a.open_selected();
+                } else if handle == a.btn_mount.handle {
+                    a.toggle_mount();
+                } else if handle == a.btn_copy_disk.handle {
+                    a.copy_disk();
                 } else if handle == a.btn_up.handle {
                     a.go_up();
                 } else if handle == a.btn_copy_sel.handle {
@@ -1759,18 +2031,12 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
                     a.copy_all();
                 } else if handle == a.btn_verify.handle {
                     a.verify();
-                } else if handle == a.btn_mount.handle {
-                    a.toggle_mount(false);
                 } else if handle == a.btn_cancel.handle {
                     a.cancel_job();
                 } else if handle == a.btn_about.handle {
                     a.about();
                 } else if handle == a.btn_donate.handle {
                     a.donate();
-                } else if handle == a.btn_open_here.handle {
-                    a.open_selected();
-                } else if handle == a.btn_mount_here.handle {
-                    a.toggle_mount(true);
                 } else if handle == a.btn_whatsapp.handle {
                     open_url(i18n::WHATSAPP_URL);
                 } else if handle == a.btn_email.handle {
@@ -1793,7 +2059,7 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
                             a.lang.set(LangCell(Some(l)));
                             save_config(Some(l), a.theme.get());
                             a.apply_texts();
-                            a.refresh_disks();
+                            a.request_scan(true);
                         }
                     }
                 } else if handle == a.combo_theme.handle {
@@ -1812,17 +2078,28 @@ fn build(lang: Lang, theme: Theme) -> Result<Rc<App>, nwg::NwgError> {
                     }
                 }
             }
+            E::OnListViewItemChanged | E::OnListViewClick => {
+                if handle == a.list.handle && a.mode.get() == 1 {
+                    let has = a.job.borrow().is_none() && a.list.selected_count() > 0;
+                    if has != a.copy_sel_visible.get() {
+                        a.update_toolbar();
+                    }
+                }
+            }
             E::OnNotice => {
                 if handle == a.notice.handle {
                     a.job_update();
+                    a.scan_update();
                 }
             }
             _ => {}
         }
     });
-    app.show_mode(0);
     app.layout();
     app.apply_theme();
+    if let Some(h) = app.window.handle.hwnd() {
+        unsafe { winuser::SetTimer(h, TIMER_PERIODIC, PERIODIC_MS, None) };
+    }
     Ok(app)
 }
 
@@ -1831,10 +2108,7 @@ fn install_panic_hook() {
         let msg = format!("{}", info);
         let path = std::env::temp_dir().join("sudomake-partition-panic.txt");
         let _ = std::fs::write(&path, &msg);
-        nwg::simple_message(i18n::APP_NAME, &format!("Erro interno / internal error:
-{}
-
-{}", msg, path.display()));
+        nwg::simple_message(i18n::APP_NAME, &format!("Erro interno / internal error:\n{}\n\n{}", msg, path.display()));
     }));
 }
 
@@ -1872,7 +2146,7 @@ fn main() {
             app.images.borrow_mut().push(arg);
         }
     }
-    app.refresh_disks();
+    app.request_scan(true);
     let quiet = std::env::args().any(|a| a == "--sem-admin");
     if !app.admin && !quiet {
         nwg::modal_info_message(&app.window, app.t("no_admin_title"), app.t("no_admin_text"));

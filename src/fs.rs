@@ -140,6 +140,10 @@ pub trait FileSystem {
     fn capacity(&self) -> Option<(u64, u64)> {
         None
     }
+    /// Bytes ocupados por este volume (estimativa do espaço necessário para o copiar inteiro).
+    fn used(&self) -> Option<u64> {
+        self.capacity().map(|(t, f)| t.saturating_sub(f))
+    }
 }
 
 pub fn names_equal(a: &str, b: &str, case_sensitive: bool) -> bool {
