@@ -28,7 +28,8 @@ cargo +stable-x86_64-pc-windows-gnu test
 ```
 
 `build.cmd` faz tudo isso e copia os executáveis para a raiz do projecto. O instalador é gerado
-com `ISCC.exe installer\sudomake-partition.iss` (Inno Setup 6).
+com `ISCC.exe installer\sudomake-partition.iss` (Inno Setup 6). Passo a passo completo em
+[GUIA-DO-DESENVOLVEDOR.md](GUIA-DO-DESENVOLVEDOR.md).
 
 ## Organização do código
 

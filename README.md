@@ -252,6 +252,8 @@ Os executáveis ficam em `target\release\SudomakePartition.exe` (interface) e
 [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 `ISCC.exe installer\sudomake-partition.iss` → `dist\sudomake-partition-setup-x.y.z.exe`.
 O GitHub Actions compila, testa e publica tudo automaticamente em cada *tag* `v*`.
+Guia passo a passo para quem vai mexer no código (executar, editar, publicar, instalador):
+[GUIA-DO-DESENVOLVEDOR.md](GUIA-DO-DESENVOLVEDOR.md).
 
 ## 🔬 Como funciona
 
