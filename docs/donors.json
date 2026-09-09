@@ -1,0 +1,4 @@
+{
+  "_como_adicionar": "Cada apoiante é um objecto com: name (nome ou 'Anónimo'), country (opcional), date (AAAA-MM-DD), amount (opcional, texto livre como '5 USD' ou '2000 Kz'), message (opcional). O site lê este ficheiro e mostra a lista na secção Apoiantes. Peça sempre autorização antes de publicar um nome.",
+  "donors": []
+}

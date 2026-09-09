@@ -101,7 +101,7 @@ macread\
 │  ├─ sobre-pt.txt, sobre-en.txt, sobre-fr.txt, sobre-es.txt   texto "Informação" do instalador
 │  └─ sudomake-partition.ico   ícone do programa e do instalador
 ├─ .github\workflows\build.yml  compilação automática no GitHub (Actions) e publicação das releases
-├─ docs\                       capturas de ecrã usadas no README
+├─ docs\                       site do projecto (GitHub Pages: index.html, site.css, site.js, donors.json, img\) e capturas usadas no README
 ├─ README.md                   manual público (é o que aparece no GitHub)
 ├─ CONTRIBUTING.md             regras para quem contribui
 ├─ build.cmd                   compila e copia os executáveis
@@ -255,7 +255,25 @@ O que o script faz e onde mudar:
 No GitHub Actions o instalador é criado da mesma forma (o `build.yml` instala o Inno Setup
 com `choco` e corre o `ISCC.exe`), por isso o que funciona aqui funciona lá.
 
-## 8. Problemas comuns
+## 8. Site do projecto (GitHub Pages)
+
+O site <https://arturjose0.github.io/sudomake-partition/> é servido directamente da pasta
+`docs\` do ramo `main`: qualquer `git push` que mude ficheiros em `docs\` actualiza o site em
+um ou dois minutos (o GitHub mostra o progresso no separador *Actions*, "pages build and
+deployment").
+
+* `docs\index.html` — a página (textos em português no HTML; os outros idiomas estão no
+  dicionário `T` de `docs\site.js`, que também obtém em tempo real da API do GitHub a última
+  release, o número de estrelas e a lista de contribuidores).
+* `docs\donors.json` — a lista de apoiantes. Para acrescentar um, edite o ficheiro e adicione
+  um objecto à lista `donors`: `{"name": "Nome ou Anónimo", "country": "Angola", "date":
+  "2026-09-09", "amount": "2000 Kz", "message": "opcional"}`. Peça sempre autorização antes de
+  publicar um nome. Faça `git add`, `git commit`, `git push` e o site actualiza.
+* `docs\img\` — as capturas de ecrã. Para renovar, tire capturas novas do programa (1400×800)
+  e substitua os ficheiros com o mesmo nome.
+* `docs\logo.png` — o logótipo usado no site, no README e no favicon.
+
+## 9. Problemas comuns
 
 | Sintoma | Causa e solução |
 |---|---|
@@ -268,7 +286,7 @@ com `choco` e corre o `ISCC.exe`), por isso o que funciona aqui funciona lá.
 | O GitHub Actions falhou no passo *Release* | confirme que o `build.yml` tem `permissions: contents: write` e que a *tag* começa por `v`. |
 | `cargo` não é reconhecido | feche e abra de novo o terminal depois de instalar o Rust, ou adicione `%USERPROFILE%\.cargo\bin` ao PATH. |
 
-## 9. Regras do projecto
+## 10. Regras do projecto
 
 * **Tudo é somente leitura**: nenhuma função pode escrever no disco de origem.
 * Textos para o utilizador passam sempre por `src/i18n.rs`, nos quatro idiomas.
