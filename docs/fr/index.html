@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SUDOMAKE Partition — lire, copier et monter des disques Mac (APFS, HFS+) et Linux (ext4) sous Windows | Gratuit, open source</title>
+<meta name="description" content="Logiciel Windows gratuit et open source qui lit, copie et monte les disques Mac (APFS, HFS+) et Linux (ext4, ext3, ext2, LVM) et les images DMG, sans pilote et en lecture seule. Récupérez les fichiers d&#x27;un MacBook ou d&#x27;un disque Linux sur un PC Windows. Fabriqué en Angola.">
+<meta name="keywords" content="ler disco Mac no Windows, APFS Windows, HFS+ Windows, ext4 Windows, abrir partição Linux no Windows, recuperar ficheiros MacBook, montar ext4 Windows, DMG Windows, APFS reader, ext4 reader, Linux reader Windows, SUDOMAKE, Angola">
+<meta name="author" content="José Artur Kassala — SUDOMAKE">
+<link rel="canonical" href="https://arturjose0.github.io/sudomake-partition/fr/">
+<link rel="alternate" hreflang="pt-AO" href="https://arturjose0.github.io/sudomake-partition/">
+<link rel="alternate" hreflang="en" href="https://arturjose0.github.io/sudomake-partition/en/">
+<link rel="alternate" hreflang="fr" href="https://arturjose0.github.io/sudomake-partition/fr/">
+<link rel="alternate" hreflang="es" href="https://arturjose0.github.io/sudomake-partition/es/">
+<link rel="alternate" hreflang="x-default" href="https://arturjose0.github.io/sudomake-partition/">
+<link rel="icon" href="../logo.png" type="image/png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SUDOMAKE Partition — lire, copier et monter des disques Mac (APFS, HFS+) et Linux (ext4) sous Windows | Gratuit, open source">
+<meta property="og:description" content="Logiciel Windows gratuit et open source qui lit, copie et monte les disques Mac (APFS, HFS+) et Linux (ext4, ext3, ext2, LVM) et les images DMG, sans pilote et en lecture seule. Récupérez les fichiers d&#x27;un MacBook ou d&#x27;un disque Linux sur un PC Windows. Fabriqué en Angola.">
+<meta property="og:image" content="https://arturjose0.github.io/sudomake-partition/img/inicio.png">
+<meta property="og:url" content="https://arturjose0.github.io/sudomake-partition/fr/">
+<meta property="og:locale" content="fr_FR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "SUDOMAKE Partition",
+  "operatingSystem": "Windows 10, Windows 11",
+  "applicationCategory": "UtilitiesApplication",
+  "description": "Logiciel Windows gratuit et open source qui lit, copie et monte les disques Mac (APFS, HFS+) et Linux (ext4, ext3, ext2, LVM) et les images DMG, sans pilote et en lecture seule. Récupérez les fichiers d'un MacBook ou d'un disque Linux sur un PC Windows. Fabriqué en Angola.",
+  "inLanguage": "fr",
+  "url": "https://arturjose0.github.io/sudomake-partition/",
+  "downloadUrl": "https://github.com/arturjose0/sudomake-partition/releases/latest",
+  "softwareVersion": "1.3.1",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "José Artur Kassala", "url": "https://github.com/arturjose0" },
+  "publisher": { "@type": "Organization", "name": "SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA", "url": "https://sudomakes.com" },
+  "countryOfOrigin": "Angola"
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Windows dit que le disque doit être formaté. Vais-je perdre mes données ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Ne formatez pas. Windows ne reconnaît ni APFS, ni HFS+, ni ext4, et propose donc de formater. Fermez l'avertissement, ouvrez SUDOMAKE Partition et le disque apparaît avec toutes ses partitions et fichiers."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Comment lire un disque de MacBook ou d'iMac sous Windows ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Branchez le disque (adaptateur USB/SATA ou NVMe, ou disque externe), ouvrez le programme, cliquez sur le volume « Macintosh HD - Data » et copiez le dossier /Users/<nom>. Vous pouvez aussi monter le volume comme lettre de lecteur (Z:) et ouvrir les fichiers dans n'importe quel programme."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Comment ouvrir une partition ext4 d'Ubuntu, Debian ou Kali sous Windows ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Ouvrez le programme, cliquez sur la partition portant le nom du système (« Ubuntu 22.04 », « Kali GNU/Linux »…) et copiez /home/<nom>, ou montez-la comme lecteur. Les partitions dans LVM apparaissent comme des volumes séparés."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Est-ce sûr ? Cela modifie-t-il le disque ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Non. Le programme est en lecture seule : il n'écrit, ne répare ni ne monte jamais en écriture. Le disque reste exactement tel quel et peut retourner sur le Mac ou la machine Linux."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Ai-je besoin du mot de passe du Mac ou de Linux ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Pas pour les disques ordinaires : le mot de passe de session ne protège que la session, les fichiers sont stockés en clair. Seuls les disques volontairement chiffrés (FileVault, LUKS, eCryptfs) ne peuvent pas être ouverts."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Combien ça coûte ? Est-ce une alternative à Paragon, MacDrive ou Linux Reader ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "C'est gratuit et open source (licence MIT), sans limite ni version payante. Il lit Mac et Linux dans le même programme, indique le système de chaque partition et n'installe aucun pilote pour lire ou copier. S'il vous aide, un don du montant de votre choix est bienvenu."
+   }
+  }
+ ]
+}
+</script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="../logo.png" alt=""><span><b>SUDOMAKE</b> Partition</span></a>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+    <nav class="menu" id="menu">
+      <a href="#funcionalidades" data-i18n="nav_features">Fonctionnalités</a>
+      <a href="#capturas" data-i18n="nav_shots">Captures</a>
+      <a href="#como-usar" data-i18n="nav_howto">Utilisation</a>
+      <a href="#download" data-i18n="nav_download">Télécharger</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contribuidores" data-i18n="nav_contrib">Contributeurs</a>
+      <a href="#doar" data-i18n="nav_donate">Faire un don ❤</a>
+      <a href="https://github.com/arturjose0/sudomake-partition" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <div class="lang" id="lang"><a href="../" data-lang="pt" title="Português (Angola)">PT</a><a href="../en/" data-lang="en" title="English">EN</a><a href="../fr/" data-lang="fr" title="Français" class="on">FR</a><a href="../es/" data-lang="es" title="Español">ES</a></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="made"><span class="flag"></span> <span data-i18n="made_in">Fabriqué en Angola</span></span>
+      <h1>SUDOMAKE Partition<small data-i18n="hero_sub">Lire, copier et monter des disques Mac et Linux sous Windows</small></h1>
+      <p class="lead" data-i18n="hero_lead">Windows n'ouvre pas les disques Mac (APFS, HFS+) ni Linux (ext4, LVM). SUDOMAKE Partition le fait : il affiche les partitions sous forme de tuiles, indique le système présent sur chacune, et vous laisse copier les fichiers ou monter le disque comme une lettre de lecteur. Gratuit, open source et en lecture seule : rien n'est modifié sur le disque d'origine.</p>
+      <div class="cta">
+        <a class="btn primary" id="btnDownload" href="https://github.com/arturjose0/sudomake-partition/releases/latest"><span>⬇</span> <span data-i18n="btn_download">Télécharger l'installateur</span> <span id="dlVersion"></span></a>
+        <a class="btn" id="btnZip" href="https://github.com/arturjose0/sudomake-partition/releases/latest" data-i18n="btn_zip">Version portable (zip)</a>
+        <a class="btn" href="https://github.com/arturjose0/sudomake-partition" target="_blank" rel="noopener">★ GitHub <span id="stars"></span></a>
+      </div>
+      <p class="meta" id="dlMeta" data-i18n="dl_meta">Windows 10/11 64 bits · aucun prérequis · licence MIT</p>
+      <div class="tags">
+        <span class="tag">APFS</span><span class="tag">HFS+ / HFSX</span><span class="tag">ext4 · ext3 · ext2</span><span class="tag">LVM2</span><span class="tag">DMG · IMG · RAW</span><span class="tag">GPT · MBR · APM</span><span class="tag">PT · EN · FR · ES</span>
+      </div>
+    </div>
+    <div>
+      <img class="hero-img shot-zoom" src="../img/inicio.png" alt="Ecrã inicial do SUDOMAKE Partition com os discos em azulejos">
+    </div>
+  </div>
+</section>
+
+<section id="funcionalidades">
+  <div class="wrap">
+    <h2 data-i18n="f_title">Ce qu'il fait</h2>
+    <p class="sub" data-i18n="f_sub">Pour le disque interne retiré d'un MacBook, d'un iMac ou d'un PC sous Ubuntu, Debian, Kali ou Fedora, pour les disques externes et clés USB formatés sur Mac ou Linux, et pour les images de disque.</p>
+    <div class="grid f4">
+      <div class="card"><div class="ico">🍎</div><h3 data-i18n="f1t">Disques Mac</h3><p data-i18n="f1">APFS (macOS 10.13 jusqu'au plus récent, tous les volumes, fichiers compressés) et HFS+/HFSX (Mac OS Étendu, Time Machine).</p></div>
+      <div class="card"><div class="ico">🐧</div><h3 data-i18n="f2t">Disques Linux</h3><p data-i18n="f2">ext4, ext3 et ext2, y compris dans des volumes LVM. Ubuntu, Debian, Kali, Mint, Fedora, RHEL…</p></div>
+      <div class="card"><div class="ico">💽</div><h3 data-i18n="f3t">Images de disque</h3><p data-i18n="f3">DMG (zlib, bzip2, ADC, LZFSE, LZMA), .img, .raw et .dd, avec tables GPT, MBR et Apple Partition Map.</p></div>
+      <div class="card"><div class="ico">🔎</div><h3 data-i18n="f4t">Détecte le système</h3><p data-i18n="f4">Chaque partition indique ce qu'elle contient : « Ubuntu 22.04 », « Kali Linux », « macOS 12.5 », « Windows », « EFI », « swap », « Time Machine »…</p></div>
+      <div class="card"><div class="ico">🔤</div><h3 data-i18n="f5t">Monter comme lecteur</h3><p data-i18n="f5">Le volume devient une lettre (Z:), en lecture seule, visible dans l'Explorateur et dans n'importe quel programme. Plusieurs disques à la fois.</p></div>
+      <div class="card"><div class="ico">📦</div><h3 data-i18n="f6t">Tout copier en sécurité</h3><p data-i18n="f6">Copiez des dossiers ou le disque entier avec progression, reprise et journal des erreurs. Avant de copier un disque entier, l'espace libre à destination est vérifié.</p></div>
+      <div class="card"><div class="ico">🔒</div><h3 data-i18n="f7t">Lecture seule</h3><p data-i18n="f7">Il n'écrit, ne répare ni ne modifie jamais le disque source. Aucun mot de passe nécessaire pour les disques ordinaires (seuls les disques chiffrés sont exclus).</p></div>
+      <div class="card"><div class="ico">🌍</div><h3 data-i18n="f8t">4 langues et thèmes</h3><p data-i18n="f8">Portugais (Angola), anglais, français, espagnol. Thème clair, sombre ou système. Les disques branchés ou retirés apparaissent automatiquement.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="capturas" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="s_title">Captures d'écran</h2>
+    <p class="sub" data-i18n="s_sub">Images de la version actuelle. Cliquez pour agrandir.</p>
+    <div class="shots">
+      <figure class="shot"><img class="shot-zoom" src="../img/inicio.png" alt="Ecrã inicial"><figcaption data-i18n="s1">Écran d'accueil : disques et partitions en tuiles, avec le système trouvé sur chacune et l'espace utilisé.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/selecao.png" alt="Partição seleccionada"><figcaption data-i18n="s2">En cliquant sur une partition, la barre n'affiche que les boutons utiles : ouvrir, monter, copier le disque entier, vérifier.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/montado.png" alt="Duas unidades montadas"><figcaption data-i18n="s3">Deux disques montés en même temps comme Z: et Y:, chacun avec son étiquette.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/navegar.png" alt="Navegação de pastas"><figcaption data-i18n="s4">Navigation dans une partition Linux : dossiers, fichiers, liens et dates, avec copie des éléments sélectionnés.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/escuro.png" alt="Tema escuro"><figcaption data-i18n="s5">Thème sombre (par défaut, celui de Windows).</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/ingles.png" alt="Interface em inglês"><figcaption data-i18n="s6">Interface en anglais ; aussi en français et en espagnol.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/sobre.png" alt="Página Sobre"><figcaption data-i18n="s7">Page « À propos » : ce qu'il fait, qui l'a créé et comment le soutenir.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/instalador.png" alt="Instalador"><figcaption data-i18n="s8">Installateur en cinq langues ; télécharge et installe le pilote Dokan tout seul s'il manque.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="como-usar">
+  <div class="wrap">
+    <h2 data-i18n="h_title">Utilisation</h2>
+    <div class="grid f4 steps">
+      <div class="card step"><h3 data-i18n="h1t">Installez</h3><p data-i18n="h1">Téléchargez l'installateur et suivez l'assistant. Si le pilote Dokan (utile seulement pour monter des lecteurs) manque, l'installateur s'en occupe.</p></div>
+      <div class="card step"><h3 data-i18n="h2t">Branchez le disque et ouvrez</h3><p data-i18n="h2">Connectez le disque par USB ou adaptateur et ouvrez le programme. Acceptez la demande d'Administrateur : Windows l'exige pour lire les disques physiques.</p></div>
+      <div class="card step"><h3 data-i18n="h3t">Cliquez sur la partition</h3><p data-i18n="h3">Les fichiers personnels sont dans /Users/nom (Mac, volume « Macintosh HD - Data ») ou /home/nom (Linux).</p></div>
+      <div class="card step"><h3 data-i18n="h4t">Ouvrez, copiez ou montez</h3><p data-i18n="h4">Ouvrir dans le programme pour parcourir et copier ; Monter comme lecteur pour utiliser le disque partout ; Copier le disque entier pour tout transférer sur un autre disque.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="faq_title">Questions fréquentes</h2>
+    <p class="sub" data-i18n="faq_sub">Les questions les plus courantes de ceux qui doivent lire un disque Mac ou Linux sur un PC Windows.</p>
+    <div class="faq">
+      <details open><summary data-i18n="q1">Windows dit que le disque doit être formaté. Vais-je perdre mes données ?</summary><p data-i18n="a1">Ne formatez pas. Windows ne reconnaît ni APFS, ni HFS+, ni ext4, et propose donc de formater. Fermez l'avertissement, ouvrez SUDOMAKE Partition et le disque apparaît avec toutes ses partitions et fichiers.</p></details>
+      <details><summary data-i18n="q2">Comment lire un disque de MacBook ou d'iMac sous Windows ?</summary><p data-i18n="a2">Branchez le disque (adaptateur USB/SATA ou NVMe, ou disque externe), ouvrez le programme, cliquez sur le volume « Macintosh HD - Data » et copiez le dossier /Users/&lt;nom&gt;. Vous pouvez aussi monter le volume comme lettre de lecteur (Z:) et ouvrir les fichiers dans n'importe quel programme.</p></details>
+      <details><summary data-i18n="q3">Comment ouvrir une partition ext4 d'Ubuntu, Debian ou Kali sous Windows ?</summary><p data-i18n="a3">Ouvrez le programme, cliquez sur la partition portant le nom du système (« Ubuntu 22.04 », « Kali GNU/Linux »…) et copiez /home/&lt;nom&gt;, ou montez-la comme lecteur. Les partitions dans LVM apparaissent comme des volumes séparés.</p></details>
+      <details><summary data-i18n="q4">Est-ce sûr ? Cela modifie-t-il le disque ?</summary><p data-i18n="a4">Non. Le programme est en lecture seule : il n'écrit, ne répare ni ne monte jamais en écriture. Le disque reste exactement tel quel et peut retourner sur le Mac ou la machine Linux.</p></details>
+      <details><summary data-i18n="q5">Ai-je besoin du mot de passe du Mac ou de Linux ?</summary><p data-i18n="a5">Pas pour les disques ordinaires : le mot de passe de session ne protège que la session, les fichiers sont stockés en clair. Seuls les disques volontairement chiffrés (FileVault, LUKS, eCryptfs) ne peuvent pas être ouverts.</p></details>
+      <details><summary data-i18n="q6">Combien ça coûte ? Est-ce une alternative à Paragon, MacDrive ou Linux Reader ?</summary><p data-i18n="a6">C'est gratuit et open source (licence MIT), sans limite ni version payante. Il lit Mac et Linux dans le même programme, indique le système de chaque partition et n'installe aucun pilote pour lire ou copier. S'il vous aide, un don du montant de votre choix est bienvenu.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <h2 data-i18n="d_title">Télécharger</h2>
+    <div class="release">
+      <div class="card">
+        <h3 id="relName" data-i18n="d_latest">Dernière version</h3>
+        <p class="kv" id="relMeta" data-i18n="d_loading">Récupération des informations de la release sur GitHub…</p>
+        <ul class="assets" id="assets"></ul>
+        <p style="margin-top:14px"><a class="btn small" href="https://github.com/arturjose0/sudomake-partition/releases" target="_blank" rel="noopener" data-i18n="d_all">Toutes les versions</a></p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="d_req_t">Prérequis et remarques</h3>
+        <ul class="plain">
+          <li data-i18n="d_req1">Windows 10 ou 11 64 bits. Rien d'autre à installer.</li>
+          <li data-i18n="d_req2">L'installateur (recommandé) installe pour votre utilisateur ou pour tous, crée des raccourcis et un désinstallateur, et télécharge le pilote Dokan 2 s'il manque.</li>
+          <li data-i18n="d_req3">La version portable (zip) ne nécessite aucune installation : décompressez et lancez SudomakePartition.exe.</li>
+          <li data-i18n="d_req4">Lire un disque physique exige les droits d'Administrateur ; le programme les demande à l'ouverture.</li>
+          <li data-i18n="d_req5">Il n'ouvre pas les disques chiffrés (FileVault, LUKS, eCryptfs) ni les Mac à puce T2 / Apple Silicon.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contribuidores" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="c_title">Contributeurs</h2>
+    <p class="sub" data-i18n="c_sub">Liste obtenue en temps réel depuis GitHub. Toute aide est bienvenue : tests avec des disques réels, traductions, documentation et code.</p>
+    <div class="people" id="contributors"><span class="empty" data-i18n="c_loading">Chargement…</span></div>
+    <p style="margin-top:18px"><a class="btn small" href="https://github.com/arturjose0/sudomake-partition/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" data-i18n="c_how">Comment contribuer</a> <a class="btn small" href="https://github.com/arturjose0/sudomake-partition/issues" target="_blank" rel="noopener" data-i18n="c_issue">Signaler un problème</a></p>
+  </div>
+</section>
+
+<section id="doar">
+  <div class="wrap">
+    <h2 data-i18n="g_title">Soutenez le développeur</h2>
+    <p class="sub" data-i18n="g_sub">SUDOMAKE Partition est gratuit et le restera. S'il vous a aidé à récupérer vos fichiers, un don du montant de votre choix aide à maintenir et améliorer le projet. Ce n'est pas obligatoire.</p>
+    <div class="grid f2">
+      <div class="donate-box">
+        <p class="big" data-i18n="g_how">Comment faire un don</p>
+        <p><b>PayPal:</b> <code>josearturkassala0@hotmail.com</code><br><a class="btn primary small" style="margin-top:8px" href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=josearturkassala0%40hotmail.com&item_name=SUDOMAKE+Partition&currency_code=USD" target="_blank" rel="noopener" data-i18n="g_paypal">Don via PayPal</a></p>
+        <p><b data-i18n="g_express">Transfert Express (Angola) :</b> <code>932693623</code></p>
+        <p data-i18n="g_after">Après votre don, envoyez le reçu par WhatsApp ou e-mail pour que nous puissions vous remercier et, si vous le souhaitez, ajouter votre nom à la liste des soutiens.</p>
+        <p><a class="btn small" href="https://wa.me/244932693623?text=Ol%C3%A1%21%20Fiz%20uma%20doa%C3%A7%C3%A3o%20ao%20SUDOMAKE%20Partition." target="_blank" rel="noopener">WhatsApp +244 932 693 623</a> <a class="btn small" href="mailto:josearturkassala0@hotmail.com?subject=Doa%C3%A7%C3%A3o%20SUDOMAKE%20Partition">E-mail</a> <a class="btn small" href="https://www.youtube.com/@arturjose0" target="_blank" rel="noopener" data-i18n="g_yt">Suivre sur YouTube</a></p>
+      </div>
+      <div>
+        <h3 data-i18n="g_list">Soutiens</h3>
+        <div class="donors" id="donors"><span class="empty" data-i18n="g_empty">Personne pour l'instant. Soyez le premier !</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sobre" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="a_title">Qui l'a créé</h2>
+    <div class="about">
+      <div>
+        <p data-i18n="a_p1">SUDOMAKE Partition a été créé en Angola par <b>José Artur Kassala</b>, via son entreprise <b>SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA</b>. Il est né d'un besoin réel : récupérer des fichiers de disques Mac et Linux avec un simple ordinateur Windows, sans payer de logiciels fermés.</p>
+        <p data-i18n="a_p2">Il est écrit en Rust, lit les systèmes de fichiers directement (sans pilote) et a été validé octet par octet face à 7-Zip et à des disques réels. Le code est ouvert sous licence MIT : chacun peut l'utiliser, l'étudier, l'améliorer et le distribuer.</p>
+      </div>
+      <div class="card">
+        <ul class="contacts">
+          <li><span data-i18n="a_company">Entreprise</span><span>SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · NIF 5002359936</span></li>
+          <li><span>WhatsApp</span><a href="https://wa.me/244932693623" target="_blank" rel="noopener">+244 932 693 623</a></li>
+          <li><span>E-mail</span><a href="mailto:josearturkassala0@hotmail.com">josearturkassala0@hotmail.com</a></li>
+          <li><span>Site</span><a href="https://sudomakes.com" target="_blank" rel="noopener">sudomakes.com</a></li>
+          <li><span>YouTube</span><a href="https://www.youtube.com/@arturjose0" target="_blank" rel="noopener">@arturjose0</a></li>
+          <li><span>GitHub</span><a href="https://github.com/arturjose0" target="_blank" rel="noopener">github.com/arturjose0</a></li>
+          <li><span data-i18n="a_country">Pays</span><span><span class="flag"></span> Angola</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="year"></span> José Artur Kassala · SUDOMAKE · <span data-i18n="made_in">Fabriqué en Angola</span> · <span data-i18n="f_license">Licence MIT</span></span>
+    <span><a href="https://github.com/arturjose0/sudomake-partition">GitHub</a> · <a href="https://github.com/arturjose0/sudomake-partition/releases">Releases</a> · <a href="https://github.com/arturjose0/sudomake-partition/blob/main/README.md" data-i18n="f_manual">Manuel</a> · <a href="https://sudomakes.com">sudomakes.com</a></span>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox"><img src="" alt=""></div>
+<script src="../site.js"></script>
+</body>
+</html>

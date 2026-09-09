@@ -1,27 +1,23 @@
 <!DOCTYPE html>
-<html lang="pt" data-base="">
+<html lang="{{LANG}}" data-base="{{BASE}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SUDOMAKE Partition — ler, copiar e montar discos Mac (APFS, HFS+) e Linux (ext4) no Windows | Grátis, feito em Angola</title>
-<meta name="description" content="Programa gratuito e de código aberto para Windows que lê, copia e monta discos de Mac (APFS, HFS+) e Linux (ext4, ext3, ext2, LVM) e imagens DMG, sem drivers e somente leitura. Recupere ficheiros de um MacBook ou de um disco Linux no Windows. Feito em Angola.">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESC}}">
 <meta name="keywords" content="ler disco Mac no Windows, APFS Windows, HFS+ Windows, ext4 Windows, abrir partição Linux no Windows, recuperar ficheiros MacBook, montar ext4 Windows, DMG Windows, APFS reader, ext4 reader, Linux reader Windows, SUDOMAKE, Angola">
 <meta name="author" content="José Artur Kassala — SUDOMAKE">
-<link rel="canonical" href="https://arturjose0.github.io/sudomake-partition/">
-<link rel="alternate" hreflang="pt-AO" href="https://arturjose0.github.io/sudomake-partition/">
-<link rel="alternate" hreflang="en" href="https://arturjose0.github.io/sudomake-partition/en/">
-<link rel="alternate" hreflang="fr" href="https://arturjose0.github.io/sudomake-partition/fr/">
-<link rel="alternate" hreflang="es" href="https://arturjose0.github.io/sudomake-partition/es/">
-<link rel="alternate" hreflang="x-default" href="https://arturjose0.github.io/sudomake-partition/">
-<link rel="icon" href="logo.png" type="image/png">
+<link rel="canonical" href="{{CANON}}">
+{{HREFLANG}}
+<link rel="icon" href="{{BASE}}logo.png" type="image/png">
 <meta property="og:type" content="website">
-<meta property="og:title" content="SUDOMAKE Partition — ler, copiar e montar discos Mac (APFS, HFS+) e Linux (ext4) no Windows | Grátis, feito em Angola">
-<meta property="og:description" content="Programa gratuito e de código aberto para Windows que lê, copia e monta discos de Mac (APFS, HFS+) e Linux (ext4, ext3, ext2, LVM) e imagens DMG, sem drivers e somente leitura. Recupere ficheiros de um MacBook ou de um disco Linux no Windows. Feito em Angola.">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESC}}">
 <meta property="og:image" content="https://arturjose0.github.io/sudomake-partition/img/inicio.png">
-<meta property="og:url" content="https://arturjose0.github.io/sudomake-partition/">
-<meta property="og:locale" content="pt_AO">
+<meta property="og:url" content="{{CANON}}">
+<meta property="og:locale" content="{{LOCALE}}">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="{{BASE}}site.css">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -29,8 +25,8 @@
   "name": "SUDOMAKE Partition",
   "operatingSystem": "Windows 10, Windows 11",
   "applicationCategory": "UtilitiesApplication",
-  "description": "Programa gratuito e de código aberto para Windows que lê, copia e monta discos de Mac (APFS, HFS+) e Linux (ext4, ext3, ext2, LVM) e imagens DMG, sem drivers e somente leitura. Recupere ficheiros de um MacBook ou de um disco Linux no Windows. Feito em Angola.",
-  "inLanguage": "pt",
+  "description": {{JSONLD_DESC}},
+  "inLanguage": "{{LANG}}",
   "url": "https://arturjose0.github.io/sudomake-partition/",
   "downloadUrl": "https://github.com/arturjose0/sudomake-partition/releases/latest",
   "softwareVersion": "1.3.1",
@@ -42,67 +38,14 @@
 }
 </script>
 <script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "O Windows diz que o disco precisa de ser formatado. Vou perder os dados?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Não formate. O Windows não reconhece APFS, HFS+ nem ext4 e por isso sugere formatar. Feche o aviso, abra o SUDOMAKE Partition e o disco aparece com todas as partições e ficheiros."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Como ler um disco de MacBook ou iMac no Windows?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Ligue o disco (por adaptador USB/SATA ou NVMe, ou o disco externo), abra o programa, clique no volume \"Macintosh HD - Data\" e copie a pasta /Users/<nome>. Também pode montar o volume como uma letra (Z:) e abrir os ficheiros em qualquer programa."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Como abrir uma partição ext4 do Ubuntu, Debian ou Kali no Windows?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Abra o programa, clique na partição marcada com o nome do sistema (\"Ubuntu 22.04\", \"Kali GNU/Linux\"…) e copie /home/<nome>, ou monte-a como unidade. Partições dentro de LVM aparecem como volumes separados."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "É seguro? Altera alguma coisa no disco?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Não. O programa é somente leitura: nunca escreve, repara nem monta em modo de escrita. O disco fica exactamente como estava, e pode voltar a usá-lo no Mac ou no Linux."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Preciso da senha do Mac ou do Linux?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Não, para discos comuns: a senha de login só protege a sessão, os ficheiros estão gravados em claro. Só discos cifrados de propósito (FileVault, LUKS, eCryptfs) não podem ser abertos."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Quanto custa? Há alternativa ao Paragon, MacDrive ou Linux Reader?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "É gratuito e de código aberto (licença MIT), sem limites nem versão paga. Lê Mac e Linux no mesmo programa, mostra que sistema está em cada partição e não instala drivers para ler ou copiar. Se ajudar, aceita-se uma doação de qualquer valor."
-   }
-  }
- ]
-}
+{{JSONLD_FAQ}}
 </script>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#"><img src="logo.png" alt=""><span><b>SUDOMAKE</b> Partition</span></a>
+    <a class="brand" href="#"><img src="{{BASE}}logo.png" alt=""><span><b>SUDOMAKE</b> Partition</span></a>
     <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
     <nav class="menu" id="menu">
       <a href="#funcionalidades" data-i18n="nav_features">Funcionalidades</a>
@@ -114,7 +57,7 @@
       <a href="#doar" data-i18n="nav_donate">Doar ❤</a>
       <a href="https://github.com/arturjose0/sudomake-partition" target="_blank" rel="noopener">GitHub</a>
     </nav>
-    <div class="lang" id="lang"><a href="./" data-lang="pt" title="Português (Angola)" class="on">PT</a><a href="en/" data-lang="en" title="English">EN</a><a href="fr/" data-lang="fr" title="Français">FR</a><a href="es/" data-lang="es" title="Español">ES</a></div>
+    <div class="lang" id="lang">{{LANG_LINKS}}</div>
   </div>
 </header>
 
@@ -135,7 +78,7 @@
       </div>
     </div>
     <div>
-      <img class="hero-img shot-zoom" src="img/inicio.png" alt="Ecrã inicial do SUDOMAKE Partition com os discos em azulejos">
+      <img class="hero-img shot-zoom" src="{{BASE}}img/inicio.png" alt="Ecrã inicial do SUDOMAKE Partition com os discos em azulejos">
     </div>
   </div>
 </section>
@@ -162,14 +105,14 @@
     <h2 data-i18n="s_title">Capturas de ecrã</h2>
     <p class="sub" data-i18n="s_sub">Imagens da versão actual. Clique para ampliar.</p>
     <div class="shots">
-      <figure class="shot"><img class="shot-zoom" src="img/inicio.png" alt="Ecrã inicial"><figcaption data-i18n="s1">Ecrã inicial: os discos e as partições em azulejos, com o sistema encontrado em cada uma e o espaço usado.</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/selecao.png" alt="Partição seleccionada"><figcaption data-i18n="s2">Ao clicar numa partição, a barra mostra só os botões que fazem sentido: abrir, montar, copiar o disco completo, verificar.</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/montado.png" alt="Duas unidades montadas"><figcaption data-i18n="s3">Dois discos montados ao mesmo tempo como Z: e Y:, cada um com a sua etiqueta.</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/navegar.png" alt="Navegação de pastas"><figcaption data-i18n="s4">Navegação dentro de uma partição Linux: pastas, ficheiros, links e datas, com cópia dos itens seleccionados.</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/escuro.png" alt="Tema escuro"><figcaption data-i18n="s5">Tema escuro (o padrão segue o Windows).</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/ingles.png" alt="Interface em inglês"><figcaption data-i18n="s6">Interface em inglês; também em francês e espanhol.</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/sobre.png" alt="Página Sobre"><figcaption data-i18n="s7">Página "Sobre": o que faz, quem desenvolveu e como apoiar.</figcaption></figure>
-      <figure class="shot"><img class="shot-zoom" src="img/instalador.png" alt="Instalador"><figcaption data-i18n="s8">Instalador em cinco idiomas, que descarrega e instala o driver Dokan sozinho se faltar.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/inicio.png" alt="Ecrã inicial"><figcaption data-i18n="s1">Ecrã inicial: os discos e as partições em azulejos, com o sistema encontrado em cada uma e o espaço usado.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/selecao.png" alt="Partição seleccionada"><figcaption data-i18n="s2">Ao clicar numa partição, a barra mostra só os botões que fazem sentido: abrir, montar, copiar o disco completo, verificar.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/montado.png" alt="Duas unidades montadas"><figcaption data-i18n="s3">Dois discos montados ao mesmo tempo como Z: e Y:, cada um com a sua etiqueta.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/navegar.png" alt="Navegação de pastas"><figcaption data-i18n="s4">Navegação dentro de uma partição Linux: pastas, ficheiros, links e datas, com cópia dos itens seleccionados.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/escuro.png" alt="Tema escuro"><figcaption data-i18n="s5">Tema escuro (o padrão segue o Windows).</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/ingles.png" alt="Interface em inglês"><figcaption data-i18n="s6">Interface em inglês; também em francês e espanhol.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/sobre.png" alt="Página Sobre"><figcaption data-i18n="s7">Página "Sobre": o que faz, quem desenvolveu e como apoiar.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="{{BASE}}img/instalador.png" alt="Instalador"><figcaption data-i18n="s8">Instalador em cinco idiomas, que descarrega e instala o driver Dokan sozinho se faltar.</figcaption></figure>
     </div>
   </div>
 </section>
@@ -285,6 +228,6 @@
 </footer>
 
 <div class="lightbox" id="lightbox"><img src="" alt=""></div>
-<script src="site.js"></script>
+<script src="{{BASE}}site.js"></script>
 </body>
 </html>

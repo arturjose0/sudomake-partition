@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SUDOMAKE Partition — read, copy and mount Mac (APFS, HFS+) and Linux (ext4) disks on Windows | Free, open source</title>
+<meta name="description" content="Free, open-source Windows tool that reads, copies and mounts Mac (APFS, HFS+) and Linux (ext4, ext3, ext2, LVM) disks and DMG images, without drivers and strictly read-only. Recover files from a MacBook or Linux drive on a Windows PC. Made in Angola.">
+<meta name="keywords" content="ler disco Mac no Windows, APFS Windows, HFS+ Windows, ext4 Windows, abrir partição Linux no Windows, recuperar ficheiros MacBook, montar ext4 Windows, DMG Windows, APFS reader, ext4 reader, Linux reader Windows, SUDOMAKE, Angola">
+<meta name="author" content="José Artur Kassala — SUDOMAKE">
+<link rel="canonical" href="https://arturjose0.github.io/sudomake-partition/en/">
+<link rel="alternate" hreflang="pt-AO" href="https://arturjose0.github.io/sudomake-partition/">
+<link rel="alternate" hreflang="en" href="https://arturjose0.github.io/sudomake-partition/en/">
+<link rel="alternate" hreflang="fr" href="https://arturjose0.github.io/sudomake-partition/fr/">
+<link rel="alternate" hreflang="es" href="https://arturjose0.github.io/sudomake-partition/es/">
+<link rel="alternate" hreflang="x-default" href="https://arturjose0.github.io/sudomake-partition/">
+<link rel="icon" href="../logo.png" type="image/png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SUDOMAKE Partition — read, copy and mount Mac (APFS, HFS+) and Linux (ext4) disks on Windows | Free, open source">
+<meta property="og:description" content="Free, open-source Windows tool that reads, copies and mounts Mac (APFS, HFS+) and Linux (ext4, ext3, ext2, LVM) disks and DMG images, without drivers and strictly read-only. Recover files from a MacBook or Linux drive on a Windows PC. Made in Angola.">
+<meta property="og:image" content="https://arturjose0.github.io/sudomake-partition/img/inicio.png">
+<meta property="og:url" content="https://arturjose0.github.io/sudomake-partition/en/">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "SUDOMAKE Partition",
+  "operatingSystem": "Windows 10, Windows 11",
+  "applicationCategory": "UtilitiesApplication",
+  "description": "Free, open-source Windows tool that reads, copies and mounts Mac (APFS, HFS+) and Linux (ext4, ext3, ext2, LVM) disks and DMG images, without drivers and strictly read-only. Recover files from a MacBook or Linux drive on a Windows PC. Made in Angola.",
+  "inLanguage": "en",
+  "url": "https://arturjose0.github.io/sudomake-partition/",
+  "downloadUrl": "https://github.com/arturjose0/sudomake-partition/releases/latest",
+  "softwareVersion": "1.3.1",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "José Artur Kassala", "url": "https://github.com/arturjose0" },
+  "publisher": { "@type": "Organization", "name": "SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA", "url": "https://sudomakes.com" },
+  "countryOfOrigin": "Angola"
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Windows says the disk needs to be formatted. Will I lose my data?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Do not format. Windows does not recognise APFS, HFS+ or ext4, so it suggests formatting. Close the prompt, open SUDOMAKE Partition and the disk appears with all its partitions and files."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do I read a MacBook or iMac disk on Windows?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Connect the disk (USB/SATA or NVMe adapter, or the external drive), open the program, click the \"Macintosh HD - Data\" volume and copy the /Users/<name> folder. You can also mount the volume as a drive letter (Z:) and open the files in any program."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do I open an ext4 partition from Ubuntu, Debian or Kali on Windows?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Open the program, click the partition labelled with the system name (\"Ubuntu 22.04\", \"Kali GNU/Linux\"…) and copy /home/<name>, or mount it as a drive. Partitions inside LVM show up as separate volumes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is it safe? Does it change anything on the disk?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No. The program is read-only: it never writes, repairs or mounts in write mode. The disk stays exactly as it was and can go back to the Mac or Linux machine."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Do I need the Mac or Linux password?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Not for ordinary disks: the login password only protects the session, the files are stored unencrypted. Only deliberately encrypted disks (FileVault, LUKS, eCryptfs) cannot be opened."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How much does it cost? Is it an alternative to Paragon, MacDrive or Linux Reader?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It is free and open source (MIT license), with no limits and no paid edition. It reads Mac and Linux in the same program, tells you which system is on each partition and installs no drivers for reading or copying. If it helps, a donation of any amount is welcome."
+   }
+  }
+ ]
+}
+</script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="../logo.png" alt=""><span><b>SUDOMAKE</b> Partition</span></a>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+    <nav class="menu" id="menu">
+      <a href="#funcionalidades" data-i18n="nav_features">Features</a>
+      <a href="#capturas" data-i18n="nav_shots">Screenshots</a>
+      <a href="#como-usar" data-i18n="nav_howto">How to use</a>
+      <a href="#download" data-i18n="nav_download">Download</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contribuidores" data-i18n="nav_contrib">Contributors</a>
+      <a href="#doar" data-i18n="nav_donate">Donate ❤</a>
+      <a href="https://github.com/arturjose0/sudomake-partition" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <div class="lang" id="lang"><a href="../" data-lang="pt" title="Português (Angola)">PT</a><a href="../en/" data-lang="en" title="English" class="on">EN</a><a href="../fr/" data-lang="fr" title="Français">FR</a><a href="../es/" data-lang="es" title="Español">ES</a></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="made"><span class="flag"></span> <span data-i18n="made_in">Made in Angola</span></span>
+      <h1>SUDOMAKE Partition<small data-i18n="hero_sub">Read, copy and mount Mac and Linux disks on Windows</small></h1>
+      <p class="lead" data-i18n="hero_lead">Windows cannot open Mac (APFS, HFS+) or Linux (ext4, LVM) disks. SUDOMAKE Partition can: it shows the partitions as tiles, tells you which system is on each one, and lets you copy the files or mount the disk as a drive letter. Free, open source and strictly read-only: nothing on the original disk is changed.</p>
+      <div class="cta">
+        <a class="btn primary" id="btnDownload" href="https://github.com/arturjose0/sudomake-partition/releases/latest"><span>⬇</span> <span data-i18n="btn_download">Download the installer</span> <span id="dlVersion"></span></a>
+        <a class="btn" id="btnZip" href="https://github.com/arturjose0/sudomake-partition/releases/latest" data-i18n="btn_zip">Portable version (zip)</a>
+        <a class="btn" href="https://github.com/arturjose0/sudomake-partition" target="_blank" rel="noopener">★ GitHub <span id="stars"></span></a>
+      </div>
+      <p class="meta" id="dlMeta" data-i18n="dl_meta">64-bit Windows 10/11 · no prerequisites · MIT license</p>
+      <div class="tags">
+        <span class="tag">APFS</span><span class="tag">HFS+ / HFSX</span><span class="tag">ext4 · ext3 · ext2</span><span class="tag">LVM2</span><span class="tag">DMG · IMG · RAW</span><span class="tag">GPT · MBR · APM</span><span class="tag">PT · EN · FR · ES</span>
+      </div>
+    </div>
+    <div>
+      <img class="hero-img shot-zoom" src="../img/inicio.png" alt="Ecrã inicial do SUDOMAKE Partition com os discos em azulejos">
+    </div>
+  </div>
+</section>
+
+<section id="funcionalidades">
+  <div class="wrap">
+    <h2 data-i18n="f_title">What it does</h2>
+    <p class="sub" data-i18n="f_sub">For the internal disk taken out of a MacBook, iMac or a PC running Ubuntu, Debian, Kali or Fedora, for external disks and USB sticks formatted on Mac or Linux, and for disk images.</p>
+    <div class="grid f4">
+      <div class="card"><div class="ico">🍎</div><h3 data-i18n="f1t">Mac disks</h3><p data-i18n="f1">APFS (macOS 10.13 to the latest, all volumes, compressed files) and HFS+/HFSX (Mac OS Extended, Time Machine).</p></div>
+      <div class="card"><div class="ico">🐧</div><h3 data-i18n="f2t">Linux disks</h3><p data-i18n="f2">ext4, ext3 and ext2, also inside LVM volumes. Ubuntu, Debian, Kali, Mint, Fedora, RHEL…</p></div>
+      <div class="card"><div class="ico">💽</div><h3 data-i18n="f3t">Disk images</h3><p data-i18n="f3">DMG (zlib, bzip2, ADC, LZFSE, LZMA), .img, .raw and .dd, with GPT, MBR and Apple Partition Map tables.</p></div>
+      <div class="card"><div class="ico">🔎</div><h3 data-i18n="f4t">Detects the system</h3><p data-i18n="f4">Every partition shows what it holds: "Ubuntu 22.04", "Kali Linux", "macOS 12.5", "Windows", "EFI", "swap", "Time Machine"…</p></div>
+      <div class="card"><div class="ico">🔤</div><h3 data-i18n="f5t">Mount as a drive</h3><p data-i18n="f5">The volume becomes a drive letter (Z:), read-only, visible in Explorer and in any program. Several disks at the same time.</p></div>
+      <div class="card"><div class="ico">📦</div><h3 data-i18n="f6t">Copy everything safely</h3><p data-i18n="f6">Copy folders or the entire disk with progress, resume and an error log. Before copying a whole disk it checks the free space at the destination.</p></div>
+      <div class="card"><div class="ico">🔒</div><h3 data-i18n="f7t">Read-only</h3><p data-i18n="f7">It never writes to, repairs or changes the source disk. No password needed for ordinary disks (only encrypted ones are excluded).</p></div>
+      <div class="card"><div class="ico">🌍</div><h3 data-i18n="f8t">4 languages and themes</h3><p data-i18n="f8">Portuguese (Angola), English, French, Spanish. Light, dark or system theme. Disks plugged in or removed appear on their own.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="capturas" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="s_title">Screenshots</h2>
+    <p class="sub" data-i18n="s_sub">Images from the current version. Click to enlarge.</p>
+    <div class="shots">
+      <figure class="shot"><img class="shot-zoom" src="../img/inicio.png" alt="Ecrã inicial"><figcaption data-i18n="s1">Start screen: disks and partitions as tiles, with the system found on each one and the used space.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/selecao.png" alt="Partição seleccionada"><figcaption data-i18n="s2">Clicking a partition shows only the buttons that apply: open, mount, copy the entire disk, verify.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/montado.png" alt="Duas unidades montadas"><figcaption data-i18n="s3">Two disks mounted at the same time as Z: and Y:, each with its badge.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/navegar.png" alt="Navegação de pastas"><figcaption data-i18n="s4">Browsing inside a Linux partition: folders, files, links and dates, copying the selected items.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/escuro.png" alt="Tema escuro"><figcaption data-i18n="s5">Dark theme (the default follows Windows).</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/ingles.png" alt="Interface em inglês"><figcaption data-i18n="s6">Interface in English; also in French and Spanish.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/sobre.png" alt="Página Sobre"><figcaption data-i18n="s7">"About" page: what it does, who made it and how to support it.</figcaption></figure>
+      <figure class="shot"><img class="shot-zoom" src="../img/instalador.png" alt="Instalador"><figcaption data-i18n="s8">Installer in five languages; downloads and installs the Dokan driver by itself if missing.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="como-usar">
+  <div class="wrap">
+    <h2 data-i18n="h_title">How to use</h2>
+    <div class="grid f4 steps">
+      <div class="card step"><h3 data-i18n="h1t">Install</h3><p data-i18n="h1">Download the installer and follow the wizard. If the Dokan driver (only needed to mount drives) is missing, the installer takes care of it.</p></div>
+      <div class="card step"><h3 data-i18n="h2t">Plug in the disk and open</h3><p data-i18n="h2">Connect the disk via USB or an adapter and open the program. Accept the Administrator prompt: Windows requires it to read physical disks.</p></div>
+      <div class="card step"><h3 data-i18n="h3t">Click the partition</h3><p data-i18n="h3">Personal files live in /Users/name (Mac, "Macintosh HD - Data" volume) or /home/name (Linux).</p></div>
+      <div class="card step"><h3 data-i18n="h4t">Open, copy or mount</h3><p data-i18n="h4">Open in the program to browse and copy; Mount as drive to use the disk in any program; Copy entire disk to move everything to another disk.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="faq_title">Frequently asked questions</h2>
+    <p class="sub" data-i18n="faq_sub">The most common questions from people who need to read a Mac or Linux disk on a Windows PC.</p>
+    <div class="faq">
+      <details open><summary data-i18n="q1">Windows says the disk needs to be formatted. Will I lose my data?</summary><p data-i18n="a1">Do not format. Windows does not recognise APFS, HFS+ or ext4, so it suggests formatting. Close the prompt, open SUDOMAKE Partition and the disk appears with all its partitions and files.</p></details>
+      <details><summary data-i18n="q2">How do I read a MacBook or iMac disk on Windows?</summary><p data-i18n="a2">Connect the disk (USB/SATA or NVMe adapter, or the external drive), open the program, click the "Macintosh HD - Data" volume and copy the /Users/&lt;name&gt; folder. You can also mount the volume as a drive letter (Z:) and open the files in any program.</p></details>
+      <details><summary data-i18n="q3">How do I open an ext4 partition from Ubuntu, Debian or Kali on Windows?</summary><p data-i18n="a3">Open the program, click the partition labelled with the system name ("Ubuntu 22.04", "Kali GNU/Linux"…) and copy /home/&lt;name&gt;, or mount it as a drive. Partitions inside LVM show up as separate volumes.</p></details>
+      <details><summary data-i18n="q4">Is it safe? Does it change anything on the disk?</summary><p data-i18n="a4">No. The program is read-only: it never writes, repairs or mounts in write mode. The disk stays exactly as it was and can go back to the Mac or Linux machine.</p></details>
+      <details><summary data-i18n="q5">Do I need the Mac or Linux password?</summary><p data-i18n="a5">Not for ordinary disks: the login password only protects the session, the files are stored unencrypted. Only deliberately encrypted disks (FileVault, LUKS, eCryptfs) cannot be opened.</p></details>
+      <details><summary data-i18n="q6">How much does it cost? Is it an alternative to Paragon, MacDrive or Linux Reader?</summary><p data-i18n="a6">It is free and open source (MIT license), with no limits and no paid edition. It reads Mac and Linux in the same program, tells you which system is on each partition and installs no drivers for reading or copying. If it helps, a donation of any amount is welcome.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <h2 data-i18n="d_title">Download</h2>
+    <div class="release">
+      <div class="card">
+        <h3 id="relName" data-i18n="d_latest">Latest version</h3>
+        <p class="kv" id="relMeta" data-i18n="d_loading">Fetching release information from GitHub…</p>
+        <ul class="assets" id="assets"></ul>
+        <p style="margin-top:14px"><a class="btn small" href="https://github.com/arturjose0/sudomake-partition/releases" target="_blank" rel="noopener" data-i18n="d_all">All versions</a></p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="d_req_t">Requirements and notes</h3>
+        <ul class="plain">
+          <li data-i18n="d_req1">64-bit Windows 10 or 11. Nothing else needs to be installed.</li>
+          <li data-i18n="d_req2">The installer (recommended) installs for your user or for everyone, creates shortcuts and an uninstaller, and downloads the Dokan 2 driver if missing.</li>
+          <li data-i18n="d_req3">The portable version (zip) needs no installation: unzip and run SudomakePartition.exe.</li>
+          <li data-i18n="d_req4">Reading a physical disk requires Administrator rights; the program asks for them when it opens.</li>
+          <li data-i18n="d_req5">It does not open encrypted disks (FileVault, LUKS, eCryptfs) or T2 / Apple Silicon Macs.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contribuidores" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="c_title">Contributors</h2>
+    <p class="sub" data-i18n="c_sub">List fetched live from GitHub. All help is welcome: test reports with real disks, translations, documentation and code.</p>
+    <div class="people" id="contributors"><span class="empty" data-i18n="c_loading">Loading…</span></div>
+    <p style="margin-top:18px"><a class="btn small" href="https://github.com/arturjose0/sudomake-partition/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" data-i18n="c_how">How to contribute</a> <a class="btn small" href="https://github.com/arturjose0/sudomake-partition/issues" target="_blank" rel="noopener" data-i18n="c_issue">Report a problem</a></p>
+  </div>
+</section>
+
+<section id="doar">
+  <div class="wrap">
+    <h2 data-i18n="g_title">Support the developer</h2>
+    <p class="sub" data-i18n="g_sub">SUDOMAKE Partition is free and will stay free. If it helped you recover your files, a donation of any amount helps to maintain and improve the project. It is not required.</p>
+    <div class="grid f2">
+      <div class="donate-box">
+        <p class="big" data-i18n="g_how">How to donate</p>
+        <p><b>PayPal:</b> <code>josearturkassala0@hotmail.com</code><br><a class="btn primary small" style="margin-top:8px" href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=josearturkassala0%40hotmail.com&item_name=SUDOMAKE+Partition&currency_code=USD" target="_blank" rel="noopener" data-i18n="g_paypal">Donate via PayPal</a></p>
+        <p><b data-i18n="g_express">Express transfer (Angola):</b> <code>932693623</code></p>
+        <p data-i18n="g_after">After donating, send the receipt via WhatsApp or e-mail so we can thank you and, if you wish, add your name to the supporters list.</p>
+        <p><a class="btn small" href="https://wa.me/244932693623?text=Ol%C3%A1%21%20Fiz%20uma%20doa%C3%A7%C3%A3o%20ao%20SUDOMAKE%20Partition." target="_blank" rel="noopener">WhatsApp +244 932 693 623</a> <a class="btn small" href="mailto:josearturkassala0@hotmail.com?subject=Doa%C3%A7%C3%A3o%20SUDOMAKE%20Partition">E-mail</a> <a class="btn small" href="https://www.youtube.com/@arturjose0" target="_blank" rel="noopener" data-i18n="g_yt">Follow on YouTube</a></p>
+      </div>
+      <div>
+        <h3 data-i18n="g_list">Supporters</h3>
+        <div class="donors" id="donors"><span class="empty" data-i18n="g_empty">Nobody yet. Be the first supporter!</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sobre" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="a_title">Who made it</h2>
+    <div class="about">
+      <div>
+        <p data-i18n="a_p1">SUDOMAKE Partition was created in Angola by <b>José Artur Kassala</b> through his company <b>SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA</b>. It was born from a real need: recovering files from Mac and Linux disks using only a Windows computer, without paying for closed software.</p>
+        <p data-i18n="a_p2">It is written in Rust, reads the file systems directly (no drivers), and was validated byte by byte against 7-Zip and against real disks. The code is open under the MIT license: anyone can use, study, improve and distribute it.</p>
+      </div>
+      <div class="card">
+        <ul class="contacts">
+          <li><span data-i18n="a_company">Company</span><span>SUDOMAKE - PRESTAÇÃO DE SERVIÇOS, (SU), LDA · NIF 5002359936</span></li>
+          <li><span>WhatsApp</span><a href="https://wa.me/244932693623" target="_blank" rel="noopener">+244 932 693 623</a></li>
+          <li><span>E-mail</span><a href="mailto:josearturkassala0@hotmail.com">josearturkassala0@hotmail.com</a></li>
+          <li><span>Site</span><a href="https://sudomakes.com" target="_blank" rel="noopener">sudomakes.com</a></li>
+          <li><span>YouTube</span><a href="https://www.youtube.com/@arturjose0" target="_blank" rel="noopener">@arturjose0</a></li>
+          <li><span>GitHub</span><a href="https://github.com/arturjose0" target="_blank" rel="noopener">github.com/arturjose0</a></li>
+          <li><span data-i18n="a_country">Country</span><span><span class="flag"></span> Angola</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="year"></span> José Artur Kassala · SUDOMAKE · <span data-i18n="made_in">Made in Angola</span> · <span data-i18n="f_license">MIT License</span></span>
+    <span><a href="https://github.com/arturjose0/sudomake-partition">GitHub</a> · <a href="https://github.com/arturjose0/sudomake-partition/releases">Releases</a> · <a href="https://github.com/arturjose0/sudomake-partition/blob/main/README.md" data-i18n="f_manual">Manual</a> · <a href="https://sudomakes.com">sudomakes.com</a></span>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox"><img src="" alt=""></div>
+<script src="../site.js"></script>
+</body>
+</html>

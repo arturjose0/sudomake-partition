@@ -262,9 +262,14 @@ O site <https://arturjose0.github.io/sudomake-partition/> é servido directament
 um ou dois minutos (o GitHub mostra o progresso no separador *Actions*, "pages build and
 deployment").
 
-* `docs\index.html` — a página (textos em português no HTML; os outros idiomas estão no
-  dicionário `T` de `docs\site.js`, que também obtém em tempo real da API do GitHub a última
-  release, o número de estrelas e a lista de contribuidores).
+* `tools\site-template.html` — o modelo da página (textos em português, marcados com
+  `data-i18n`). `docs\i18n.json` tem todos os textos nos quatro idiomas, incluindo o título e
+  a descrição para os motores de busca e as perguntas frequentes. Depois de editar qualquer um
+  dos dois, corra `python tools\build-site.py`: ele gera `docs\index.html` (PT),
+  `docs\en\`, `docs\fr\`, `docs\es\` (páginas por idioma, com `hreflang`),
+  `docs\sitemap.xml` e `docs\robots.txt`. Não edite os `index.html` gerados à mão.
+* `docs\site.js` — obtém em tempo real da API do GitHub a última release, o número de
+  estrelas e a lista de contribuidores, e lê `donors.json`.
 * `docs\donors.json` — a lista de apoiantes. Para acrescentar um, edite o ficheiro e adicione
   um objecto à lista `donors`: `{"name": "Nome ou Anónimo", "country": "Angola", "date":
   "2026-09-09", "amount": "2000 Kz", "message": "opcional"}`. Peça sempre autorização antes de
@@ -272,6 +277,22 @@ deployment").
 * `docs\img\` — as capturas de ecrã. Para renovar, tire capturas novas do programa (1400×800)
   e substitua os ficheiros com o mesmo nome.
 * `docs\logo.png` — o logótipo usado no site, no README e no favicon.
+
+### Aparecer no Google (o que só o dono do site pode fazer)
+
+1. **Google Search Console** (<https://search.google.com/search-console>): adicione a
+   propriedade `https://arturjose0.github.io/sudomake-partition/` (tipo "Prefixo do URL").
+   Para verificar, escolha "Etiqueta HTML", copie a linha `<meta name="google-site-verification"
+   content="...">` e cole-a no `<head>` de `tools\site-template.html`; gere o site e faça push.
+   Depois, em "Sitemaps", submeta `sitemap.xml`.
+2. **Bing Webmaster Tools** (<https://www.bing.com/webmasters>): pode importar directamente
+   do Search Console.
+3. **Ligações para o site**: ponha o link em <https://sudomakes.com>, na descrição dos vídeos
+   do YouTube, nas redes sociais, e registe o programa em directórios de software
+   (AlternativeTo, Softpedia, MajorGeeks, Uptodown) e em fóruns de recuperação de dados.
+   Quantos mais sites apontarem para o seu, mais alto ele fica.
+4. **Vídeo no YouTube** a mostrar o programa a recuperar um disco de Mac/Linux, com o link
+   do site na descrição: o Google mostra vídeos nos resultados e as pessoas partilham.
 
 ## 9. Problemas comuns
 

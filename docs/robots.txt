@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://arturjose0.github.io/sudomake-partition/sitemap.xml

@@ -55,11 +55,12 @@ nav.menu { margin-left: auto; display: flex; gap: 18px; flex-wrap: wrap; }
 nav.menu a { color: var(--ink-2); font-weight: 500; font-size: 0.95rem; }
 nav.menu a:hover { color: var(--blue); text-decoration: none; }
 .lang { display: flex; gap: 4px; flex-shrink: 0; white-space: nowrap; }
-.lang button {
+.lang a, .lang button {
   border: 1px solid var(--line); background: #fff; color: var(--ink-2);
-  border-radius: 8px; padding: 4px 8px; cursor: pointer; font: inherit; font-size: 0.85rem;
+  border-radius: 8px; padding: 4px 8px; cursor: pointer; font: inherit; font-size: 0.85rem; text-decoration: none;
 }
-.lang button.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+.lang a.on, .lang button.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+.lang a:hover { text-decoration: none; border-color: var(--blue); }
 .menu-toggle { display: none; margin-left: auto; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 10px; font: inherit; cursor: pointer; }
 
 /* herói */
@@ -108,6 +109,13 @@ nav.menu a:hover { color: var(--blue); text-decoration: none; }
 .steps { counter-reset: s; }
 .step { position: relative; padding-left: 58px; }
 .step::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 0; width: 42px; height: 42px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+
+/* FAQ */
+.faq details { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 10px; }
+.faq summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; gap: 10px; align-items: baseline; }
+.faq summary::before { content: "+"; color: var(--blue); font-weight: 700; }
+.faq details[open] summary::before { content: "–"; }
+.faq details p { margin: 10px 0 0; color: var(--ink-2); }
 
 /* download */
 .release { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; align-items: start; }
